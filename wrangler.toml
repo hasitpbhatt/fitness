@@ -1,0 +1,31 @@
+name = "fitness"
+# NOTE: pinned to the newest date supported by the local workerd binary
+# bundled with wrangler 4.86 (Node 20 environment). Raise when wrangler
+# is upgraded on a Node 22+ machine — deploy will reject dates newer
+# than the running wrangler supports.
+compatibility_date = "2026-05-03"
+pages_build_output_dir = "./dist"
+
+# D1 (SQLite) — primary database (existing hasit-in db)
+[[d1_databases]]
+binding = "DB"
+database_name = "hasit-in"
+database_id = "ea3f54ed-75e6-4a45-b7b9-d80509efe4e8"
+migrations_dir = "migrations"
+
+# KV — sessions, rate limits, OAuth state (separate from freellm_sessions)
+[[kv_namespaces]]
+binding = "fitness_sessions"
+id = "7c8d3674dcd64c1c8a9e2b136527b4eb"
+
+[vars]
+ENVIRONMENT = "production"
+PUBLIC_ORIGIN = "https://fitness.hasit.in"
+FREELLM_BASE_URL = "https://freellm.hasit.in/v1"
+FREELLM_VL_MODEL = "nemotron-3-5-super-vl"
+FREELLM_TEXT_MODEL = "nemotron-3-ultra-550b-a55b"
+
+# Secrets (set via `wrangler pages secret put <NAME>`, or .dev.vars locally):
+#   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET — OAuth
+#   ADMIN_EMAIL — admin role auto-grant on signup
+#   FREELLM_API_KEY — server-side key for photo calorie scanning

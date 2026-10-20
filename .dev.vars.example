@@ -1,0 +1,21 @@
+# Example .dev.vars — copy to .dev.vars and fill in your values
+#
+# Local development (npm run dev:pages → http://localhost:8788):
+#   ENVIRONMENT=development
+#   PUBLIC_ORIGIN=http://localhost:8788
+#   — register http://localhost:8788/api/auth/google/callback in Google Cloud Console
+#
+# Production values live in wrangler.toml [vars]; secrets via:
+#   wrangler pages secret put GOOGLE_CLIENT_ID
+#   wrangler pages secret put GOOGLE_CLIENT_SECRET
+#   wrangler pages secret put ADMIN_EMAIL
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+ADMIN_EMAIL=
+PUBLIC_ORIGIN=http://localhost:8788
+ENVIRONMENT=development
+FREELLM_BASE_URL=https://freellm.hasit.in/v1
+FREELLM_VL_MODEL=nemotron-3-5-super-vl
+FREELLM_TEXT_MODEL=nemotron-3-ultra-550b-a55b
+FREELLM_API_KEY=
