@@ -98,6 +98,29 @@ export type MacroTotals = {
   fat_g: number
 }
 
+export type HabitKey = 'water' | 'protein' | 'sleep' | 'stretch'
+
+export type HabitDay = {
+  date: string
+  water_ml: number
+  protein_g: number
+  sleep_hours: number
+  stretch_min: number
+}
+
+export type HabitTargets = {
+  water_ml: number
+  protein_g: number
+  sleep_hours: number
+  stretch_min: number
+}
+
+export type HabitsResponse = {
+  date: string
+  days: HabitDay[]
+  targets: HabitTargets
+}
+
 export type ScanItem = {
   name: string
   qty: number

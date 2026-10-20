@@ -1293,6 +1293,90 @@ try {
     }
   }
 
+  console.log('\n-- habits --')
+  {
+    const before = await json(await call('/api/fitness/habits', { headers: authHeaders }))
+    const beforeToday = before.body.days?.[before.body.days.length - 1]
+    check(
+      'habits return a 7-day rollup including today',
+      before.status === 200 &&
+        before.body.days?.length === 7 &&
+        beforeToday?.date === localDate(null) &&
+        before.body.targets?.protein_g === 150,
+      JSON.stringify(before.body).slice(0, 300),
+    )
+
+    const waterBefore = beforeToday?.water_ml ?? 0
+    const water = await json(
+      await call('/api/fitness/habits/quick', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ habit: 'water', amount: 250 }),
+      }),
+    )
+    check(
+      'quick water increments the day',
+      water.status === 200 && water.body.value === waterBefore + 250,
+      JSON.stringify(water.body),
+    )
+
+    const proteinBefore = beforeToday?.protein_g ?? 0
+    const protein = await json(
+      await call('/api/fitness/habits/quick', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ habit: 'protein', amount: 20 }),
+      }),
+    )
+    check(
+      'quick protein increments the day',
+      protein.status === 200 && protein.body.value === proteinBefore + 20,
+      JSON.stringify(protein.body),
+    )
+
+    const stretch = await json(
+      await call('/api/fitness/habits/quick', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ habit: 'stretch', amount: 10 }),
+      }),
+    )
+    check(
+      'quick stretch stores a habit value',
+      stretch.status === 200 && stretch.body.value === 10,
+      JSON.stringify(stretch.body),
+    )
+
+    const after = await json(await call('/api/fitness/habits', { headers: authHeaders }))
+    const afterToday = after.body.days?.[after.body.days.length - 1]
+    check(
+      'habits reflect water, protein, and stretch adds',
+      afterToday?.water_ml === waterBefore + 250 &&
+        afterToday?.protein_g === proteinBefore + 20 &&
+        afterToday?.stretch_min === 10,
+      JSON.stringify(afterToday),
+    )
+  }
+  {
+    const unauthorized = await json(
+      await call('/api/fitness/habits/quick', {
+        method: 'POST',
+        body: JSON.stringify({ habit: 'water', amount: 250 }),
+      }),
+    )
+    check('quick habit without cookie -> 401', unauthorized.status === 401)
+  }
+  {
+    const bad = await json(
+      await call('/api/fitness/habits/quick', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ habit: 'sleep', amount: 8 }),
+      }),
+    )
+    check('quick habit rejects unsupported habits -> 400', bad.status === 400 && bad.body.error === 'invalid_habit')
+  }
+
   console.log('\n-- guard & logout --')
   {
     const { status } = await json(await call('/api/fitness/log/today'))

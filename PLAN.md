@@ -47,13 +47,14 @@ back to these.
 - `fitness_logs` has **2 rows**, no duplicate `(user_id, recorded_at, type)`.
 - Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql`,
   `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
-  `0005_scan_ledger_and_welcome_slot.sql`, and `0006_macro_targets.sql` exist in source,
-  apply cleanly locally, and are awaiting the remote window.
+  `0005_scan_ledger_and_welcome_slot.sql`, `0006_macro_targets.sql`, and `0007_habits.sql`
+  exist in source, apply cleanly locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 87/87.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 94/94.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
-  targets/bars, editable/removable entries, and yesterday logging/correction.
+  targets/bars, editable/removable entries, yesterday logging/correction, and a habit
+  tracker with quick-add chips plus a 7-day strip.
 
 ### Freellm (production)
 
@@ -135,7 +136,7 @@ admin UI shipped in the member bundle.
 | C-16 | Indian food DB, manual search, portion scaling, brands | AI estimate only | seed common Indian/branded foods, portions, manual add (**P1**) |
 | C-17 | AI food search returning options | text estimate only | option list + quantity scaler, reusing the scan quota (**P2**) |
 | C-18 | AI photo scan + recalculate | DONE | keep; explicit "not counted" on failure (**DONE**) |
-| C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | water/sleep logs only | add protein/stretch, chips, 7-day strip/history (**P1**) |
+| C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | DONE | water/protein/sleep rollup, stretch quick-add, chips, 7-day strip |
 | C-20 | Human food-photo review queue / community-approved DB | none | pending/approve/merge queue (**P3**) |
 | C-21 | AI coach chat grounded in plan/progress, 20/day, clear | none | grounded chat, daily quota, clear, starter prompts (**P1**) |
 | C-22 | AI usage meters + friendly exhaustion copy | scan quota DONE | extend meters to search/coach; shared copy (**P1**) |
@@ -212,15 +213,16 @@ mandatory.
    `npx wrangler pages secret put FREELLM_API_KEY --project-name fitness`.
 2. Verify with `npx wrangler pages secret list --project-name fitness`.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
-   `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`, and
-   `0006_macro_targets.sql` remotely in a short window.
+   `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
+   `0006_macro_targets.sql`, and `0007_habits.sql` remotely in a short window.
 4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns),
-   `fitness_scan_usage`, `scan_data`, `fitness_scan_ledger`, macro columns on
-   `fitness_logs`, partial `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`.
+   `fitness_scan_usage`, `scan_data`, `fitness_scan_ledger`, `fitness_habits`, macro
+   columns on `fitness_logs`, partial `idx_fitness_logs_user_date_type`,
+   `idx_user_badges_user_code`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
-   re-estimate, log scan with macros, edit/delete, yesterday log, quota increments,
-   21st call 429, duplicate 409.
+   re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
+   7-day rollup, quota increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -229,6 +231,7 @@ mandatory.
 - [ ] Manual + two scans = correct total, with macros.
 - [ ] Macro targets save; today's bars reflect edits and scan totals.
 - [ ] Edit/remove today's entry; log and repair yesterday's entry.
+- [ ] Habit chips add water/protein/stretch; 7-day strip reflects them.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
 - [ ] Admin/other user cannot touch this user's goals.
@@ -238,7 +241,7 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002-0006; old code ignores the ledger and macro columns
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0007; old code ignores the ledger, macro columns, and habits table
   and still benefits from the welcome-row index exception.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
@@ -255,6 +258,7 @@ mandatory.
 | Idempotency | Same `scan_id` twice -&gt; one row/entry | verify |
 | Macros | Targets round-trip; scan + manual macros merge | verify |
 | Corrections | Edit/delete entry; yesterday log; date window enforced | verify |
+| Habits | Quick-add water/protein/stretch; 7-day rollup and targets | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
 | Backfill failure | Profile stays unconfirmed; retry works | verify |

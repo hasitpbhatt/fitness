@@ -8,6 +8,7 @@ import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { TimezoneModal } from '../components/food/TimezoneModal'
 import { MacroBars } from '../components/nutrition/MacroBars'
 import { MacroTargetsModal } from '../components/nutrition/MacroTargetsModal'
+import { HabitTracker } from '../components/habits/HabitTracker'
 import { EditLogModal } from '../components/EditLogModal'
 import type {
   Badge,
@@ -302,6 +303,8 @@ export default function Dashboard() {
       )}
 
       <MacroBars totals={macroTotals} targets={targets} onEditTargets={() => setTargetsOpen(true)} />
+
+      <HabitTracker onChanged={() => void loadData()} />
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
