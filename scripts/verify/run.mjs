@@ -289,6 +289,33 @@ try {
     const { status, body } = await json(await call('/api/fitness/logs', { headers: authHeaders }))
     check('logs range 200 with rows', status === 200 && body.logs?.length >= 2)
   }
+  {
+    const today = localDate(null)
+    await db
+      .prepare(
+        `INSERT OR IGNORE INTO fitness_logs (id, user_id, type, recorded_at, activity, created_at, updated_at)
+         VALUES ('log-welcome', 'u-verify', 'custom', ?, 'Welcome to fitness.hasit.in', ?, ?)`,
+      )
+      .bind(today, now, now)
+      .run()
+    const { status, body } = await json(
+      await call('/api/fitness/log', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ type: 'custom', activity: 'Stretch test' }),
+      }),
+    )
+    check(
+      'signup welcome row does not consume the custom slot',
+      status === 200 && body.log?.type === 'custom' && body.log?.activity === 'Stretch test',
+      JSON.stringify(body),
+    )
+    await db
+      .prepare(
+        "DELETE FROM fitness_logs WHERE user_id = 'u-verify' AND activity IN ('Welcome to fitness.hasit.in', 'Stretch test')",
+      )
+      .run()
+  }
 
   console.log('\n-- streaks & badges --')
   {
@@ -795,6 +822,75 @@ try {
       }),
     )
     check('undoing a missing scan -> 404', undoAgain.status === 404)
+
+    const midnightLog = await json(
+      await call('/api/fitness/log/scan', {
+        method: 'POST',
+        headers: mergeHeaders,
+        body: JSON.stringify({
+          scan_id: 'merge-midnight',
+          timezone: 'UTC',
+          items: [{ name: 'Idli', qty: 1, unit: 'plate', calories: 300, protein_g: 8, fat_g: 4, carbs_g: 50 }],
+        }),
+      }),
+    )
+    check(
+      'pre-midnight scan logs normally',
+      midnightLog.status === 200 && midnightLog.body.calories === 900,
+      JSON.stringify(midnightLog.body),
+    )
+    const yesterday = addDays(mergeDate, -1)
+    await db.batch([
+      db
+        .prepare('UPDATE fitness_logs SET recorded_at = ? WHERE id = ?')
+        .bind(yesterday, midnightLog.body.log_id),
+      db
+        .prepare(
+          'UPDATE fitness_scan_ledger SET recorded_at = ? WHERE user_id = ? AND scan_id = ?',
+        )
+        .bind(yesterday, 'u-merge', 'merge-midnight'),
+    ])
+    const retryAfterMidnight = await json(
+      await call('/api/fitness/log/scan', {
+        method: 'POST',
+        headers: mergeHeaders,
+        body: JSON.stringify({
+          scan_id: 'merge-midnight',
+          timezone: 'UTC',
+          items: [{ name: 'Idli', qty: 1, unit: 'plate', calories: 300, protein_g: 8, fat_g: 4, carbs_g: 50 }],
+        }),
+      }),
+    )
+    check(
+      'a scan retried after midnight is a duplicate, not a second meal',
+      retryAfterMidnight.status === 200 &&
+        retryAfterMidnight.body.duplicate === true &&
+        retryAfterMidnight.body.log_id === midnightLog.body.log_id &&
+        retryAfterMidnight.body.date === yesterday,
+      JSON.stringify(retryAfterMidnight.body),
+    )
+    const storedMidnight = await db
+      .prepare("SELECT COUNT(*) AS c FROM fitness_logs WHERE user_id = 'u-merge' AND scan_data LIKE '%merge-midnight%'")
+      .first()
+    check('the cross-midnight retry stored only one scan entry', storedMidnight?.c === 1, JSON.stringify(storedMidnight))
+
+    const undoMidnight = await json(
+      await call('/api/fitness/log/scan/undo', {
+        method: 'POST',
+        headers: mergeHeaders,
+        body: JSON.stringify({ scan_id: 'merge-midnight' }),
+      }),
+    )
+    const ledgerAfterUndo = await db
+      .prepare("SELECT COUNT(*) AS c FROM fitness_scan_ledger WHERE user_id = 'u-merge' AND scan_id = 'merge-midnight'")
+      .first()
+    check(
+      'undo clears the scan ledger so a corrected re-log is allowed',
+      undoMidnight.status === 200 &&
+        undoMidnight.body.calories === 600 &&
+        ledgerAfterUndo?.c === 0,
+      JSON.stringify({ undo: undoMidnight.body, ledger: ledgerAfterUndo }),
+    )
 
     const usage = await db
       .prepare("SELECT COUNT(*) AS rows FROM fitness_scan_usage WHERE user_id = 'u-merge'")

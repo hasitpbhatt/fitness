@@ -45,11 +45,12 @@ back to these.
 
 - Deployed app is the old pre-scan build (`850f076f`); `POST /api/fitness/scan` returns 404.
 - `fitness_logs` has **2 rows**, no duplicate `(user_id, recorded_at, type)`.
-- Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql` and
-  `0003_scan_usage_and_unique_day.sql` are **not applied**. `0004_fitness_hardening.sql`
-  exists in source and is applied locally; it is also awaiting the remote window.
+- Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql`,
+  `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`, and
+  `0005_scan_ledger_and_welcome_slot.sql` exist in source, apply cleanly locally, and
+  are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 75/75.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 80/80.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation.
 
@@ -82,13 +83,6 @@ Severity: **P0** blocks deploy / data loss / security · **P1** likely user-visi
 significant risk · **P2** medium · **P3** polish. Status: `OPEN`, `NOW`, `NEXT`, `LATER`,
 `ACCEPTED`. Completed work lives in the progress log.
 
-### Fitness
-
-| ID | Sev | Issue | Status |
-| --- | --- | --- | --- |
-| F-10 | P3 | Cross-midnight retry with the same `scan_id` can log twice (only today's row is checked). | **OPEN** (needs a scan ledger) |
-| F-11 | P3 | Signup welcome row can consume the user's `custom` slot on the same UTC day. | **OPEN** |
-
 ### Freellm
 
 | ID | Sev | Issue | Status |
@@ -99,17 +93,13 @@ significant risk · **P2** medium · **P3** polish. Status: `OPEN`, `NOW`, `NEXT
 
 ## 5. Remaining work
 
-### 5.1 Hardening (current deploy gate)
+### 5.1 Hardening (next)
 
-1. **Cross-midnight retry (F-10).** Add a scan ledger so a retried `scan_id` cannot log
-   twice after midnight.
-2. **Welcome slot (F-11).** Keep the signup welcome row from consuming the same day's
-   `custom` slot.
-3. **Observability.** Count scan requests by phase/status/model, quota hits, p50/p95
+1. **Observability.** Count scan requests by phase/status/model, quota hits, p50/p95
    latency, token cost per scan, and upstream 429/5xx by provider/key.
-4. **Cost guardrails.** Alert on daily AI spend; cap the shared token's aggregate burn;
+2. **Cost guardrails.** Alert on daily AI spend; cap the shared token's aggregate burn;
    record image-token usage per request (finishes R-06).
-5. **Shared-DB guardrails.** Document cascade risk; require a fitness-data check before
+3. **Shared-DB guardrails.** Document cascade risk; require a fitness-data check before
    any `freellm_users` rebuild; never restore D1 time travel casually.
 
 ### 5.2 Competitor parity (FitJam audit)
@@ -168,8 +158,8 @@ admin UI shipped in the member bundle.
 
 ### 5.3 Parity sequence
 
-1. **Finish the deploy gate first:** F-10, F-11. No parity work should delay
-   the already-hardened meal-scan release.
+1. **Deploy gate is clear.** Request deploy permission (runbook order), run live
+   acceptance, then start parity Wave 1; land observability/cost guardrails alongside.
 2. **Wave 1 — daily app:** C-13 PWA, C-14/C-19 habits, C-15 macros, C-12 measurements,
    C-16 food DB, C-17 AI search, C-23/C-24 notifications, C-21 coach, C-26 meal plan,
    C-32 minimal admin, C-01 onboarding, C-02 entitlements, C-37 baseline analytics.
@@ -220,10 +210,12 @@ mandatory.
    the password manager — D1 stores only a hash):
    `npx wrangler pages secret put FREELLM_API_KEY --project-name fitness`.
 2. Verify with `npx wrangler pages secret list --project-name fitness`.
-3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`, and
-   `0004_fitness_hardening.sql` remotely in a short window.
+3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
+   `0004_fitness_hardening.sql`, and `0005_scan_ledger_and_welcome_slot.sql` remotely in
+   a short window.
 4. Verify tables/indexes: `fitness_profiles`, `fitness_scan_usage`, `scan_data`,
-   `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`.
+   `fitness_scan_ledger`, `idx_fitness_logs_user_date_type` (partial),
+   `idx_user_badges_user_code`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, photo scan, text scan, re-estimate,
    log scan, quota increments, 21st call 429, duplicate 409.
@@ -242,7 +234,8 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002–0004; old code ignores them.
+- Fitness: Pages rollback to `850f076f`. Leave 0002–0005; old code ignores the ledger
+  and still benefits from the welcome-row index exception.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
 ---
@@ -380,8 +373,14 @@ The first release is done when:
   so the client no longer gives up while freellm is still retrying. Added a two-config
   regression test proving the second config is never dialed after the deadline. Freellm
   **243/243 tests**, typecheck, lint, build pass.
-- **Next:** finish F-10/F-11, request deploy permission (runbook order), run live
-  acceptance, then start parity Wave 1.
+- **2026-10-20 - scan idempotency and welcome slot:** added migration
+  `0005_scan_ledger_and_welcome_slot.sql` with a per-user `fitness_scan_ledger` and a
+  partial unique index that exempts the welcome row. Logging a scan now writes the log and
+  ledger in one D1 batch; a retry after local midnight returns the original `log_id`
+  instead of adding a second meal, and undo clears the ledger so a corrected re-log works.
+  Verify covers both edges. Fitness **80/80 checks**, typecheck, lint, build pass.
+- **Next:** request deploy permission (runbook order), run live acceptance, then start
+  parity Wave 1 while landing observability/cost guardrails.
 
 ## 12. Working agreement
 

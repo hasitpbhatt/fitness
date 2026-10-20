@@ -613,6 +613,31 @@ app.post('/api/fitness/log/scan', async (c) => {
   const entry: LogScanEntry = { scan_id: scanId, description, items, totals, logged_at: now }
   const itemNames = items.slice(0, 3).map((item) => item.name).join(', ')
 
+  // A retry can cross local midnight, when "today's row" is a different row.
+  // The ledger makes the scan id globally unique per user, not just per day.
+  const duplicateResponse = async () => {
+    const ledger = await c.env.DB.prepare(
+      'SELECT log_id, recorded_at FROM fitness_scan_ledger WHERE user_id = ? AND scan_id = ?',
+    )
+      .bind(session.userId, scanId)
+      .first<{ log_id: string; recorded_at: string }>()
+    if (!ledger) return null
+    const prior = await c.env.DB.prepare('SELECT calories FROM fitness_logs WHERE id = ?')
+      .bind(ledger.log_id)
+      .first<{ calories: number | null }>()
+    return c.json({
+      ok: true,
+      duplicate: true,
+      log_id: ledger.log_id,
+      calories: prior?.calories ?? 0,
+      date: ledger.recorded_at,
+    })
+  }
+  {
+    const duplicate = await duplicateResponse()
+    if (duplicate) return duplicate
+  }
+
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const existing = await c.env.DB.prepare(
       "SELECT id, activity, calories, scan_data, updated_at FROM fitness_logs WHERE user_id = ? AND type = 'nutrition' AND recorded_at = ?",
@@ -650,28 +675,39 @@ app.post('/api/fitness/log/scan', async (c) => {
         : `${nextScans.length} meals today`
     const activity = existing?.activity?.trim() ? existing.activity : computedActivity
 
-    if (existing) {
-      const result = await c.env.DB.prepare(
-        'UPDATE fitness_logs SET scan_data = ?, calories = ?, activity = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
-      )
-        .bind(scanData, calories, activity, now, existing.id, existing.updated_at)
-        .run()
-      if ((result.meta.changes ?? 0) === 0) continue
-      await updateStreaks(c.env, session.userId, timezone).catch((err) => {
-        console.error('[scan] updateStreaks failed', err)
-      })
-      return c.json({ ok: true, log_id: existing.id, calories, scan_count: nextScans.length, date: today })
-    }
+    const id = existing?.id ?? newId()
+    const logStatement = existing
+      ? c.env.DB.prepare(
+          'UPDATE fitness_logs SET scan_data = ?, calories = ?, activity = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+        ).bind(scanData, calories, activity, now, existing.id, existing.updated_at)
+      : c.env.DB.prepare(
+          `INSERT OR IGNORE INTO fitness_logs
+             (id, user_id, type, recorded_at, activity, calories, scan_data, created_at, updated_at)
+           VALUES (?, ?, 'nutrition', ?, ?, ?, ?, ?, ?)`,
+        ).bind(id, session.userId, today, activity, calories, scanData, now, now)
 
-    const id = newId()
-    const result = await c.env.DB.prepare(
-      `INSERT OR IGNORE INTO fitness_logs
-         (id, user_id, type, recorded_at, activity, calories, scan_data, created_at, updated_at)
-       VALUES (?, ?, 'nutrition', ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(id, session.userId, today, activity, calories, scanData, now, now)
-      .run()
-    if ((result.meta.changes ?? 0) === 0) continue
+    let result
+    try {
+      result = await c.env.DB.batch([
+        c.env.DB.prepare(
+          `INSERT INTO fitness_scan_ledger (user_id, scan_id, log_id, recorded_at, created_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        ).bind(session.userId, scanId, id, today, now),
+        logStatement,
+      ])
+    } catch (err) {
+      const duplicate = await duplicateResponse()
+      if (duplicate) return duplicate
+      console.error('[scan] ledger write failed', err)
+      continue
+    }
+    if ((result[1]?.meta.changes ?? 0) === 0) {
+      await c.env.DB.prepare('DELETE FROM fitness_scan_ledger WHERE user_id = ? AND scan_id = ?')
+        .bind(session.userId, scanId)
+        .run()
+        .catch((err) => console.error('[scan] ledger cleanup failed', err))
+      continue
+    }
 
     await updateStreaks(c.env, session.userId, timezone).catch((err) => {
       console.error('[scan] updateStreaks failed', err)
@@ -734,12 +770,18 @@ app.post('/api/fitness/log/scan/undo', async (c) => {
       /^Meal: /.test(row.activity ?? '') || /^\d+ meals? today$/.test(row.activity ?? '')
 
     if (remaining.length === 0 && nextCalories === 0 && scanGenerated) {
-      const deleted = await c.env.DB.prepare(
-        'DELETE FROM fitness_logs WHERE id = ? AND updated_at = ?',
-      )
-        .bind(row.id, row.updated_at)
-        .run()
-      if ((deleted.meta.changes ?? 0) === 0) continue
+      const deleted = await c.env.DB.batch([
+        c.env.DB.prepare('DELETE FROM fitness_logs WHERE id = ? AND updated_at = ?').bind(
+          row.id,
+          row.updated_at,
+        ),
+        c.env.DB.prepare(
+          `DELETE FROM fitness_scan_ledger
+            WHERE user_id = ? AND scan_id = ?
+              AND NOT EXISTS (SELECT 1 FROM fitness_logs WHERE id = ?)`,
+        ).bind(session.userId, scanId, row.id),
+      ])
+      if ((deleted[0]?.meta.changes ?? 0) === 0) continue
       return c.json({
         ok: true,
         deleted: true,
@@ -760,19 +802,24 @@ app.post('/api/fitness/log/scan/undo', async (c) => {
       }
     }
 
-    const updated = await c.env.DB.prepare(
-      'UPDATE fitness_logs SET scan_data = ?, calories = ?, activity = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
-    )
-      .bind(
+    const updated = await c.env.DB.batch([
+      c.env.DB.prepare(
+        'UPDATE fitness_logs SET scan_data = ?, calories = ?, activity = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+      ).bind(
         remaining.length > 0 ? JSON.stringify({ source: 'scan', scans: remaining }) : null,
         nextCalories,
         activity,
         now,
         row.id,
         row.updated_at,
-      )
-      .run()
-    if ((updated.meta.changes ?? 0) === 0) continue
+      ),
+      c.env.DB.prepare(
+        `DELETE FROM fitness_scan_ledger
+          WHERE user_id = ? AND scan_id = ?
+            AND EXISTS (SELECT 1 FROM fitness_logs WHERE id = ? AND updated_at = ?)`,
+      ).bind(session.userId, scanId, row.id, now),
+    ])
+    if ((updated[0]?.meta.changes ?? 0) === 0) continue
 
     return c.json({
       ok: true,
