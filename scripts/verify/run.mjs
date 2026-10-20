@@ -1630,6 +1630,124 @@ try {
     check('food search without cookie -> 401', unauthorized.status === 401)
   }
 
+  console.log('\n-- notifications --')
+  {
+    const created = await json(
+      await call('/api/admin/notifications', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          title: 'Hydration check',
+          body: 'Have you had water in the last hour?',
+          url: '/log',
+          audience: 'all',
+          sticky: true,
+          send_at: Date.now() - 1000,
+        }),
+      }),
+    )
+    check('admin can send an in-app notification', created.status === 201 && created.body.status === 'sent', JSON.stringify(created.body))
+
+    const feed = await json(await call('/api/fitness/notifications', { headers: authHeaders }))
+    const item = feed.body.notifications?.find((entry) => entry.id === created.body.id)
+    check(
+      'member feed includes the sticky notification and counts it unread',
+      feed.status === 200 && item?.sticky === 1 && item?.viewed === 0 && feed.body.unread >= 1,
+      JSON.stringify(feed.body).slice(0, 400),
+    )
+
+    const viewed = await json(
+      await call(`/api/fitness/notifications/${created.body.id}/view`, { method: 'POST', headers: authHeaders }),
+    )
+    const adminList = await json(await call('/api/admin/notifications', { headers: authHeaders }))
+    const adminItem = adminList.body.notifications?.find((entry) => entry.id === created.body.id)
+    check(
+      'view tracking marks the notification read and increments admin views',
+      viewed.status === 200 && Number(adminItem?.views) === 1,
+      JSON.stringify(adminItem),
+    )
+
+    const dismissed = await json(
+      await call(`/api/fitness/notifications/${created.body.id}/dismiss`, { method: 'POST', headers: authHeaders }),
+    )
+    const afterDismiss = await json(await call('/api/fitness/notifications', { headers: authHeaders }))
+    check(
+      'dismiss removes the notification from the member feed',
+      dismissed.status === 200 && !afterDismiss.body.notifications?.some((entry) => entry.id === created.body.id),
+      JSON.stringify(afterDismiss.body).slice(0, 400),
+    )
+
+    const scheduledAt = Date.now() + 60 * 60 * 1000
+    const scheduled = await json(
+      await call('/api/admin/notifications', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          title: 'Future reminder',
+          body: 'This should wait.',
+          audience: 'free',
+          send_at: scheduledAt,
+        }),
+      }),
+    )
+    const hidden = await json(await call('/api/fitness/notifications', { headers: authHeaders }))
+    check(
+      'scheduled notifications stay hidden until their send time',
+      scheduled.status === 201 &&
+        scheduled.body.status === 'scheduled' &&
+        !hidden.body.notifications?.some((entry) => entry.id === scheduled.body.id),
+      JSON.stringify(hidden.body).slice(0, 300),
+    )
+
+    const cancelled = await json(
+      await call(`/api/admin/notifications/${scheduled.body.id}/cancel`, { method: 'POST', headers: authHeaders }),
+    )
+    check('admin can cancel a scheduled notification', cancelled.status === 200 && cancelled.body.status === 'cancelled', JSON.stringify(cancelled.body))
+
+    const draft = await json(
+      await call('/api/admin/notifications', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ title: 'Draft', body: 'Not sent yet.', audience: 'all' }),
+      }),
+    )
+    const tested = await json(
+      await call(`/api/admin/notifications/${draft.body.id}/test`, { method: 'POST', headers: authHeaders }),
+    )
+    const testFeed = await json(await call('/api/fitness/notifications', { headers: authHeaders }))
+    const testItem = testFeed.body.notifications?.find((entry) => entry.id === tested.body.id)
+    check(
+      'admin test delivers a private copy to the admin feed',
+      draft.body.status === 'draft' && tested.status === 200 && testItem?.title === 'Test: Draft',
+      JSON.stringify({ draft: draft.body, test: tested.body, item: testItem }),
+    )
+
+    const badUrl = await json(
+      await call('/api/admin/notifications', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ title: 'Bad', body: 'Link', url: 'https://example.com', audience: 'all' }),
+      }),
+    )
+    check('admin notification rejects external links -> 400', badUrl.status === 400 && badUrl.body.error === 'invalid_url', JSON.stringify(badUrl.body))
+
+    const notifyNow = Date.now()
+    await db
+      .prepare(
+        `INSERT INTO freellm_users (id, email, username, display_name, referral_code, balance_credits, role, email_verified, created_at, updated_at)
+         VALUES ('u-notify', 'notify@example.com', 'notify', 'Notify', 'NOTIFY01', 0, 'user', 1, ?, ?)`,
+      )
+      .bind(notifyNow, notifyNow)
+      .run()
+    await kv.put('session:notify-token', JSON.stringify({ userId: 'u-notify' }))
+    const notifyHeaders = { cookie: 'fitness_session=notify-token', 'content-type': 'application/json' }
+    const forbidden = await json(await call('/api/admin/notifications', { headers: notifyHeaders }))
+    check('non-admin cannot read notification admin -> 403', forbidden.status === 403, JSON.stringify(forbidden.body))
+
+    const anon = await json(await call('/api/admin/notifications'))
+    check('notification admin without cookie -> 401', anon.status === 401, JSON.stringify(anon.body))
+  }
+
   console.log('\n-- guard & logout --')
   {
     const { status } = await json(await call('/api/fitness/log/today'))

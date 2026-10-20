@@ -48,15 +48,17 @@ back to these.
 - Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql`,
   `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
   `0005_scan_ledger_and_welcome_slot.sql`, `0006_macro_targets.sql`, `0007_habits.sql`,
-  `0008_measurements.sql`, and `0009_foods.sql` exist in source, apply cleanly locally,
-  and are awaiting the remote window.
+  `0008_measurements.sql`, `0009_foods.sql`, and `0010_notifications.sql` exist in source,
+  apply cleanly locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 114/114.
+- VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 124/124.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
   with quick-add chips plus a 7-day strip, weight/waist/hips/arms history, and a seeded
-  food database with portion scaling, manual entry, and AI food search options.
+  food database with portion scaling, manual entry, AI food search options, and in-app
+  notifications with admin compose/schedule.
 
 ### Freellm (production)
 
@@ -142,8 +144,8 @@ admin UI shipped in the member bundle.
 | C-20 | Human food-photo review queue / community-approved DB | none | pending/approve/merge queue (**P3**) |
 | C-21 | AI coach chat grounded in plan/progress, 20/day, clear | none | grounded chat, daily quota, clear, starter prompts (**P1**) |
 | C-22 | AI usage meters + friendly exhaustion copy | scan quota DONE | extend meters to search/coach; shared copy (**P1**) |
-| C-23 | Push + in-app popups + constant reminder banner + view counts | none | VAPID push, popups, admin banner, viewed tracking (**P1**) |
-| C-24 | Notification admin: compose, schedule, audience, test, cancel | none | admin console + scheduled notifications (**P1**) |
+| C-23 | Push + in-app popups + constant reminder banner + view counts | in-app DONE | in-app popups/banner, view tracking; VAPID push pending keys + dispatcher (**PARTIAL**) |
+| C-24 | Notification admin: compose, schedule, audience, test, cancel | DONE | admin console, scheduling, audience, test, cancel, view counts |
 | C-25 | Email lifecycle/campaigns/unsubscribe | none | welcome + weekly summary + unsubscribe; campaigns later (**P2**) |
 | C-26 | Meal-plan viewer/delivery (in-app/PDF/WhatsApp) | none | in-app plan + PDF export; WhatsApp handoff optional (**P1**) |
 | C-27 | Consultation slots, booking, reminders (no payment) | none | slots/booking/confirmation; no checkout (**P2**) |
@@ -217,15 +219,17 @@ mandatory.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
    `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
    `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`, and
-   `0009_foods.sql` remotely in a short window.
+   `0009_foods.sql`, and `0010_notifications.sql` remotely in a short window.
 4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns),
    `fitness_scan_usage`, `scan_data`, `fitness_scan_ledger`, `fitness_habits`,
-   `fitness_measurements`, `fitness_foods`, macro columns on `fitness_logs`, partial
+   `fitness_measurements`, `fitness_foods`, `fitness_notifications`,
+   `fitness_notification_views`, macro columns on `fitness_logs`, partial
    `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
-   7-day rollup, measurement history, food search/portion logging, quota increments, 21st call 429, duplicate 409.
+   7-day rollup, measurement history, food search/portion logging, notification
+   feed/admin, quota increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -238,6 +242,7 @@ mandatory.
 - [ ] Measurement save/update/delete persists and keeps omitted fields.
 - [ ] Food search finds seeds/brands; portion scaling and manual entry add nutrition.
 - [ ] AI food search returns options, scales the chosen portion, and spends one estimate.
+- [ ] Admin sends a banner/popup; member view and dismiss counts update.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
 - [ ] Admin/other user cannot touch this user's goals.
@@ -247,9 +252,9 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002-0009; old code ignores the ledger,
-  macro columns, habits, measurements, and foods tables and still benefits from the
-  welcome-row index exception.
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0010; old code ignores the ledger,
+  macro columns, habits, measurements, foods, and notification tables and still benefits
+  from the welcome-row index exception.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
 ---
@@ -269,6 +274,7 @@ mandatory.
 | Measurements | Upsert keeps omitted fields; history/delete; date window | verify |
 | Foods | Seeded search, brands, portion math, manual add, merge into day | verify |
 | AI food search | Option normalization, quota spend/refund, model prompt | verify |
+| Notifications | Audience/schedule, view/dismiss, admin test/cancel | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
 | Backfill failure | Profile stays unconfirmed; retry works | verify |
@@ -440,8 +446,16 @@ The first release is done when:
   chosen option before logging it as a manual nutrition entry. Invalid queries are
   rejected, failed upstream calls refund the quota, and an unconfigured gateway returns
   503. Fitness **114/114 checks**, typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with
-  C-23/C-24 notifications next; C-12 photo compare waits on private storage approval.
+- **2026-10-20 - in-app notifications (C-23 partial, C-24):** added
+  `0010_notifications.sql` with notification records and per-user view/dismiss state.
+  Members get a bell feed with unread counts, a once-per-session popup, and sticky
+  banners; see `GET /api/fitness/notifications` plus view/dismiss actions. Admins get a
+  compose console at `/admin/notifications` with audience targeting, scheduled delivery,
+  test copies, send-now/cancel, and per-notification view/dismiss counts. Push delivery
+  remains deferred until VAPID keys and a dispatcher exist. Fitness **124/124 checks**,
+  typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-22
+  usage meters, then C-21 coach; C-12 photo compare waits on private storage approval.
   Land observability/cost guardrails alongside.
 
 ## 12. Working agreement

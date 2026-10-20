@@ -4,6 +4,10 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { MobileBottomNav } from './nav/MobileBottomNav'
 import { MobileMenu } from './nav/MobileMenu'
+import { NotificationBanner } from './notifications/NotificationBanner'
+import { NotificationBell } from './notifications/NotificationBell'
+import { NotificationPopup } from './notifications/NotificationPopup'
+import { NotificationProvider } from './notifications/NotificationProvider'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -15,10 +19,22 @@ const navItems = [
 ]
 
 export default function AppShell() {
+  return (
+    <NotificationProvider>
+      <AppShellContent />
+    </NotificationProvider>
+  )
+}
+
+function AppShellContent() {
   const { user, loading, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [streak, setStreak] = useState<number | null>(null)
   const location = useLocation()
+  const displayNavItems =
+    user?.role === 'admin'
+      ? [...navItems, { to: '/admin/notifications', label: 'Notifications' }]
+      : navItems
 
   useEffect(() => {
     if (!user) {
@@ -55,7 +71,7 @@ export default function AppShell() {
             aria-label="Primary"
             className="-mx-1 hidden max-w-full flex-1 items-center gap-1 overflow-x-auto whitespace-nowrap px-1 text-[13px] [scrollbar-width:thin] md:flex"
           >
-            {navItems.map((item) => (
+            {displayNavItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
@@ -86,6 +102,7 @@ export default function AppShell() {
                     <span className="num">{streak}</span>
                   </Link>
                 )}
+                <NotificationBell />
                 <span className="hidden text-[13px] text-muted lg:inline">{user.username}</span>
                 <button
                   onClick={() => void logout()}
@@ -118,11 +135,13 @@ export default function AppShell() {
         id="main-content"
         className="mx-auto max-w-6xl px-4 py-6 pb-[calc(5rem_+_env(safe-area-inset-bottom))] md:pb-6"
       >
+        <NotificationBanner />
         <Outlet />
       </main>
+      <NotificationPopup />
       <MobileBottomNav />
       <div id="mobile-menu">
-        <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
+        <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} isAdmin={user?.role === 'admin'} />
       </div>
     </div>
   )

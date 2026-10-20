@@ -111,6 +111,36 @@ export type Food = {
   portion_label: string | null
 }
 
+export type AppNotification = {
+  id: string
+  title: string
+  body: string
+  url: string | null
+  sticky: number
+  send_at: number
+  sent_at: number | null
+  viewed: number
+  dismissed: number
+}
+
+export type AdminNotification = {
+  id: string
+  user_id: string | null
+  title: string
+  body: string
+  url: string | null
+  audience: 'all' | 'free' | 'pro' | 'enterprise' | 'test'
+  status: 'draft' | 'scheduled' | 'sent' | 'cancelled'
+  sticky: number
+  send_at: number | null
+  sent_at: number | null
+  created_by: string
+  created_at: number
+  updated_at: number
+  views: number
+  dismissals: number
+}
+
 export type FoodOption = {
   name: string
   description: string

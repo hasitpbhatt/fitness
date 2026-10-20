@@ -4,6 +4,7 @@ import fitnessRoutes from '../../functions/routes/fitness'
 import foodRoutes from '../../functions/routes/foods'
 import habitRoutes from '../../functions/routes/habits'
 import measurementRoutes from '../../functions/routes/measurements'
+import notificationRoutes from '../../functions/routes/notifications'
 import profileRoutes from '../../functions/routes/profile'
 import scanRoutes from '../../functions/routes/scan'
 import type { Bindings } from '../../functions/lib/types'
@@ -26,6 +27,7 @@ app.route('/', fitnessRoutes)
 app.route('/', foodRoutes)
 app.route('/', habitRoutes)
 app.route('/', measurementRoutes)
+app.route('/', notificationRoutes)
 app.route('/', profileRoutes)
 app.route('/', scanRoutes)
 

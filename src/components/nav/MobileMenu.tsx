@@ -1,7 +1,15 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 
-export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function MobileMenu({
+  open,
+  onClose,
+  isAdmin = false,
+}: {
+  open: boolean
+  onClose: () => void
+  isAdmin?: boolean
+}) {
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'
@@ -32,6 +40,9 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
           <Link to="/measurements" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Measurements</Link>
           <Link to="/achievements" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Achievements</Link>
           <Link to="/leaderboard" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Leaderboard</Link>
+          {isAdmin && (
+            <Link to="/admin/notifications" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Notifications</Link>
+          )}
           <Link to="/install" onClick={onClose} className="px-3 py-2 text-[13px] text-muted hover:bg-surface-2 hover:text-content rounded-lg">Install app</Link>
         </nav>
       </div>

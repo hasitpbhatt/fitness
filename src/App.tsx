@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Foods from './pages/Foods'
 import Log from './pages/Log'
 import Achievements from './pages/Achievements'
+import AdminNotifications from './pages/AdminNotifications'
 import Leaderboard from './pages/Leaderboard'
 import Measurements from './pages/Measurements'
 import Install from './pages/Install'
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/achievements" element={<Achievements />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/measurements" element={<Measurements />} />
+          <Route path="/admin/notifications" element={<AdminNotifications />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -5,6 +5,7 @@ import fitnessRoutes from '../routes/fitness'
 import foodRoutes from '../routes/foods'
 import habitRoutes from '../routes/habits'
 import measurementRoutes from '../routes/measurements'
+import notificationRoutes from '../routes/notifications'
 import profileRoutes from '../routes/profile'
 import scanRoutes from '../routes/scan'
 import type { Bindings, Variables } from '../lib/types'
@@ -49,6 +50,7 @@ app.route('/', fitnessRoutes)
 app.route('/', foodRoutes)
 app.route('/', habitRoutes)
 app.route('/', measurementRoutes)
+app.route('/', notificationRoutes)
 app.route('/', profileRoutes)
 app.route('/', scanRoutes)
 
