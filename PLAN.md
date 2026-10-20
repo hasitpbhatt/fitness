@@ -1,6 +1,6 @@
 # Fitness × Freellm — Holistic Plan
 
-> Status: living document. Updated 2026-10-19.
+> Status: living document. Updated 2026-10-20.
 > Scope: `fitness.hasit.in` (meal estimates, daily logs, timezone-aware streaks) and the
 > `freellm.hasit.in` gateway it depends on (vision routing, capabilities, billing).
 > Rule: **nothing in this plan may be deployed without explicit per-deploy permission.**
@@ -95,28 +95,94 @@ significant risk · **P2** medium · **P3** polish. Status: `OPEN`, `NOW`, `NEXT
 | --- | --- | --- | --- |
 | R-06 | P1 | Under-reserved vision requests can be delivered and then fail settlement for free. | **PARTIAL** (reserve is 3000/image; exact per-image metering still future) |
 | R-15 | P3 | Upstream 30s timeout + non-stream fallback can approach fitness's 60s abort. | **OPEN** |
-| R-17 | P3 | `toWireMessages` drops older images silently. | **OPEN** (D-07) |
 
 ---
 
 ## 5. Remaining work
 
-### Reliability and leverage
+### 5.1 Hardening (current deploy gate)
 
 1. **Timeout budget (R-15).** Align upstream and fitness timeouts; consider streaming for
    scans or a shorter max token budget.
-2. **Older images (R-17, D-07).** Show an "older images omitted" notice; never pretend
-   they were sent.
-3. **Cross-midnight retry (F-10).** Add a scan ledger so a retried `scan_id` cannot log
+2. **Cross-midnight retry (F-10).** Add a scan ledger so a retried `scan_id` cannot log
    twice after midnight.
-4. **Welcome slot (F-11).** Keep the signup welcome row from consuming the same day's
+3. **Welcome slot (F-11).** Keep the signup welcome row from consuming the same day's
    `custom` slot.
-5. **Observability.** Count scan requests by phase/status/model, quota hits, p50/p95
+4. **Observability.** Count scan requests by phase/status/model, quota hits, p50/p95
    latency, token cost per scan, and upstream 429/5xx by provider/key.
-6. **Cost guardrails.** Alert on daily AI spend; cap the shared token's aggregate burn;
+5. **Cost guardrails.** Alert on daily AI spend; cap the shared token's aggregate burn;
    record image-token usage per request (finishes R-06).
-7. **Shared-DB guardrails.** Document cascade risk; require a fitness-data check before
+6. **Shared-DB guardrails.** Document cascade risk; require a fitness-data check before
    any `freellm_users` rebuild; never restore D1 time travel casually.
+
+### 5.2 Competitor parity (FitJam audit)
+
+Source: local-only `ref_audit.md` (deliberately gitignored). Target: **at least parity
+with every member-facing capability**, plus the admin/content tooling needed to operate
+those features. The **only excluded cluster is payment integration** (pricing matrix,
+checkout, EMI/countdown, money-back, finance/ERP). Sales/lead CRM is deferred unless we
+run a paid coaching funnel; it is still tracked below, not silently dropped.
+
+Already ahead of FitJam: Google OAuth instead of name+phone identity, public member
+leaderboard, live AI estimate quota with refunds, server-side authorization, and no
+admin UI shipped in the member bundle.
+
+| ID | FitJam capability | Us today | Coverage plan |
+| --- | --- | --- | --- |
+| C-01 | Onboarding: goal, 20-zone timezone selector, push prompt | goal + auto timezone confirm; no push prompt or manual zone list | extend first-run onboarding; manual zone picker; notification opt-in (**P1**) |
+| C-02 | Staff-provisioned access tiers (Inner Circle/Transform), trials, auto-revoke, deactivation copy | single tier; Google auth | admin-granted entitlements (`free`/`plus`/`coach`) + gated UI; no payments (**P1**) |
+| C-03 | Pause/resume plan with a resume date | none | plan start/pause/resume + reminder (**P2**) |
+| C-04 | Ask-a-doubt, personal member links, coach inbox/email | none | support form + email; tokenized personal links if coaching mode lands (**P2**) |
+| C-05 | Workout library/categories + MP4/YouTube/Bunny player | none | categories, video player, admin authoring (**P1**) |
+| C-06 | Scheduled plan/calendar: completed, locked, missed, today | daily logs only | assignments, day states, weekly calendar (**P1**) |
+| C-07 | Two-part daily routine + 50% motivational interrupt + day-complete + notify coach | none | part 1/2 flow, mid-point card, day close-out, optional coach ping (**P2**) |
+| C-08 | Content drops/unlock chains + progress percentage | none | release schedule, locked states, completion % (**P2**) |
+| C-09 | Live classes: schedule, synced player, attendance, local time | none | schedule + attendance now; synced playback only if demand (**P3**) |
+| C-10 | Workout comments/community | leaderboard + badges only | comments/cheers with moderation; keep the public leaderboard lead (**P2**) |
+| C-11 | Fitness Reset education (Eat Smart / Move Smart) | none | curated video/article library with completion (**P3**) |
+| C-12 | Measurements + weekly same-outfit photo compare | none | weight/waist/hips/arms history; private weekly photo compare (**P1**) |
+| C-13 | PWA install page, offline shell, forced update | plain SPA | manifest, install page, service worker, update-required prompt (**P1**) |
+| C-14 | Streaks, badges, daily loops, leaderboard | DONE | keep; add plan-adherence streaks when schedules land |
+| C-15 | Macro targets + macro progress + editable entries + yesterday correction | calories only | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix (**P1**) |
+| C-16 | Indian food DB, manual search, portion scaling, brands | AI estimate only | seed common Indian/branded foods, portions, manual add (**P1**) |
+| C-17 | AI food search returning options | text estimate only | option list + quantity scaler, reusing the scan quota (**P2**) |
+| C-18 | AI photo scan + recalculate | DONE | keep; explicit "not counted" on failure (**DONE**) |
+| C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | water/sleep logs only | add protein/stretch, chips, 7-day strip/history (**P1**) |
+| C-20 | Human food-photo review queue / community-approved DB | none | pending/approve/merge queue (**P3**) |
+| C-21 | AI coach chat grounded in plan/progress, 20/day, clear | none | grounded chat, daily quota, clear, starter prompts (**P1**) |
+| C-22 | AI usage meters + friendly exhaustion copy | scan quota DONE | extend meters to search/coach; shared copy (**P1**) |
+| C-23 | Push + in-app popups + constant reminder banner + view counts | none | VAPID push, popups, admin banner, viewed tracking (**P1**) |
+| C-24 | Notification admin: compose, schedule, audience, test, cancel | none | admin console + scheduled notifications (**P1**) |
+| C-25 | Email lifecycle/campaigns/unsubscribe | none | welcome + weekly summary + unsubscribe; campaigns later (**P2**) |
+| C-26 | Meal-plan viewer/delivery (in-app/PDF/WhatsApp) | none | in-app plan + PDF export; WhatsApp handoff optional (**P1**) |
+| C-27 | Consultation slots, booking, reminders (no payment) | none | slots/booking/confirmation; no checkout (**P2**) |
+| C-28 | Results/testimonials CMS + public result pages | none | public results + admin CRUD (**P3**) |
+| C-29 | Per-route SEO, sitemap, structured data, prerender | SPA shell | route meta, sitemap, JSON-LD, prerender public pages (**P2**) |
+| C-30 | Calorie/TDEE calculator lead magnet | none | public calculator + optional email capture (**P3**) |
+| C-31 | Acquisition funnel, lead CRM, sales scripts, game-plan parser | none | defer unless we run paid coaching; no payment integration (**P3**) |
+| C-32 | Admin/coach ops: members, grants, content, meal tracking, report cards, food review, calls | none | build the subset needed by C-02/05/06/07/20/23/24; rest with coaching mode (**P1/P2**) |
+| C-33 | i18n | none | extract strings now; add Hindi after EN parity (**P3**) |
+| C-34 | Health-platform sync (Apple Health/Google Fit) | none | native wrapper or Health Connect; PWA cannot; defer (**P3**) |
+| C-35 | Haptics/micro-interactions/micro-wins | partial | haptics, reduced-motion paths, success micro-wins (**P3**) |
+| C-36 | Terms, privacy, data export/delete, unsubscribe | none | legal pages + account export/delete (**P2**) |
+| C-37 | Analytics/observability | basic logs only | funnel, scan reliability, quota, latency, cost, retention (**P1/P2**) |
+| C-38 | Pricing/payment/finance/EMI/countdown/money-back | none | **EXCLUDED** — payment integration by instruction |
+| C-39 | Security anti-patterns: name+phone identity, admin UI in public bundle | Google OAuth; server-side authz/admin | deliberately not copied; keep the stronger model (**DONE**) |
+
+### 5.3 Parity sequence
+
+1. **Finish the deploy gate first:** R-15, F-10, F-11. No parity work should delay
+   the already-hardened meal-scan release.
+2. **Wave 1 — daily app:** C-13 PWA, C-14/C-19 habits, C-15 macros, C-12 measurements,
+   C-16 food DB, C-17 AI search, C-23/C-24 notifications, C-21 coach, C-26 meal plan,
+   C-32 minimal admin, C-01 onboarding, C-02 entitlements, C-37 baseline analytics.
+3. **Wave 2 — training depth:** C-05/C-06/C-07/C-08 workouts/plans/routines/drops,
+   C-32 content authoring, C-25 email, C-27 consultation, C-29 SEO, C-36 legal, C-03
+   pause, C-04 support, C-10 comments.
+4. **Wave 3 — scale:** C-09 live classes, C-11 education, C-20 food review, C-28 results
+   CMS, C-30 calculator, C-33 i18n, C-34 health sync, C-35 haptics.
+5. **Excluded / conditional:** C-38 payments; C-31 sales ops only if we launch a paid
+   coaching funnel.
 
 ---
 
@@ -246,6 +312,8 @@ The first release is done when:
    message content.
 7. Both builds, all tests, and the live acceptance list pass.
 8. The plan is updated with what shipped, what was deferred, and why.
+9. Competitor parity: every member-facing row in §5.2 is shipped or has an explicit
+   deferred/conditional verdict; the only excluded cluster is payment integration.
 
 ---
 
@@ -296,12 +364,21 @@ The first release is done when:
 - **2026-10-19 - key-level retry:** a 429 now retries the next key on the same config
   before failing over to another config, for streaming and non-streaming calls. Added a
   two-key regression test. Freellm **240/240 tests**, typecheck, lint, build pass.
-- **2026-10-19 - empty-result and 409 recovery:** a zero-item estimate with clarification
+- **2026-10-20 - empty-result and 409 recovery:** a zero-item estimate with clarification
   questions now opens review instead of an error screen, keeping the questions and
   re-estimate path visible; duplicate manual logs link straight to the dashboard.
   Fitness typecheck/lint/build pass (lint warnings pre-existing).
-- **Next:** finish the remaining P3 work (R-15, R-17, F-10/F-11), then request deploy
-  permission (runbook order) and run live acceptance.
+- **2026-10-20 - FitJam parity audit:** mapped every member-facing FitJam capability from
+  `ref_audit.md` into §5.2 (`C-01`–`C-39`), including onboarding, plan tiers, workouts,
+  measurements/photos, PWA, macros/food DB, habits, AI coach, notifications, meal plans,
+  admin/coach tooling, SEO, i18n, and health sync. Payment/pricing/finance is the only
+  excluded cluster; sales CRM is deferred unless coaching launches.
+- **2026-10-20 - older-image notice:** `toWireMessages` moved to `src/lib/chat.ts`, keeps
+  the newest 8 images, and reports how many older ones were left out. Chat now shows an
+  explicit warning (with the text-history reassurance) instead of silently omitting them.
+  Added two unit tests. Freellm **242/242 tests**, typecheck, lint, build pass.
+- **Next:** finish the remaining P3 hardening (R-15, F-10/F-11), request deploy
+  permission (runbook order), run live acceptance, then start parity Wave 1.
 
 ## 12. Working agreement
 
