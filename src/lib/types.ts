@@ -23,6 +23,9 @@ export type FitnessLog = {
   duration_min: number | null
   calories: number | null
   water_ml: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
   sets: number | null
   reps: number | null
   weight: number | null
@@ -79,6 +82,20 @@ export type FitnessProfile = {
   confirmed: boolean
   detected: string | null
   signedIn: boolean
+}
+
+export type MacroTargets = {
+  calorie_target: number | null
+  protein_target_g: number | null
+  carbs_target_g: number | null
+  fat_target_g: number | null
+}
+
+export type MacroTotals = {
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
 }
 
 export type ScanItem = {

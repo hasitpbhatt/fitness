@@ -6,7 +6,17 @@ import { detectTimezone } from '../lib/timezone'
 import { Button, Card } from '../components/ui'
 import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { TimezoneModal } from '../components/food/TimezoneModal'
-import type { Badge, FitnessLog, FitnessProfile, Streak } from '../lib/types'
+import { MacroBars } from '../components/nutrition/MacroBars'
+import { MacroTargetsModal } from '../components/nutrition/MacroTargetsModal'
+import { EditLogModal } from '../components/EditLogModal'
+import type {
+  Badge,
+  FitnessLog,
+  FitnessProfile,
+  MacroTargets,
+  MacroTotals,
+  Streak,
+} from '../lib/types'
 
 const TYPE_META: Record<string, { label: string; icon: string }> = {
   workout: { label: 'Workout', icon: '💪' },
@@ -21,7 +31,10 @@ const SEEN_BADGES_KEY = 'fitness_seen_badges'
 const WELCOME_LOG_ACTIVITY = 'Welcome to fitness.hasit.in'
 
 function logSummary(log: FitnessLog): string {
-  if (log.type === 'sleep' && log.duration_min != null) return `${log.duration_min}h`
+  if (log.type === 'sleep') {
+    const hours = log.hours ?? log.duration_min
+    return hours != null ? `${hours}h` : ''
+  }
   if (log.duration_min != null) return `${log.duration_min} min`
   if (log.type === 'nutrition' && log.calories != null) return `${log.calories} kcal`
   if (log.type === 'water' && log.water_ml != null) return `${log.water_ml} ml`
@@ -57,13 +70,16 @@ export default function Dashboard() {
   const [undoError, setUndoError] = useState<string | null>(null)
   const [timezoneOpen, setTimezoneOpen] = useState(false)
   const [savingTimezone, setSavingTimezone] = useState(false)
+  const [targets, setTargets] = useState<MacroTargets | null>(null)
+  const [targetsOpen, setTargetsOpen] = useState(false)
+  const [editingLog, setEditingLog] = useState<FitnessLog | null>(null)
 
   const loadData = useCallback(async () => {
     if (!user) return
     const detected = detectTimezone()
     try {
       const [logsData, streakData, badgeData, profileData] = await Promise.all([
-        api.get<{ logs: FitnessLog[]; date: string; timezone: string }>(
+        api.get<{ logs: FitnessLog[]; date: string; timezone: string; targets: MacroTargets }>(
           `/fitness/log/today?tz=${encodeURIComponent(detected)}`,
         ),
         api.get<{ streaks: Streak | null }>('/fitness/streaks'),
@@ -72,6 +88,7 @@ export default function Dashboard() {
       ])
       setLogs(logsData.logs)
       setTodayDate(logsData.date)
+      setTargets(logsData.targets)
       setStreak(streakData.streaks ?? null)
       setBadges(badgeData.badges)
       setProfile(profileData)
@@ -134,6 +151,18 @@ export default function Dashboard() {
         timeZone: 'UTC',
       })
     : ''
+  const macroTotals = todayLogs.reduce<MacroTotals>(
+    (sum, log) => {
+      if (log.type !== 'nutrition') return sum
+      return {
+        calories: sum.calories + (log.calories ?? 0),
+        protein_g: sum.protein_g + (log.protein_g ?? 0),
+        carbs_g: sum.carbs_g + (log.carbs_g ?? 0),
+        fat_g: sum.fat_g + (log.fat_g ?? 0),
+      }
+    },
+    { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
+  )
 
   const confirmDetectedTimezone = async () => {
     if (!profile?.timezone) return
@@ -272,6 +301,8 @@ export default function Dashboard() {
         </div>
       )}
 
+      <MacroBars totals={macroTotals} targets={targets} onEditTargets={() => setTargetsOpen(true)} />
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Card className="p-4">
           <p className="text-[12px] uppercase tracking-wide text-muted">Today&apos;s logs</p>
@@ -347,7 +378,17 @@ export default function Dashboard() {
                     <p className="truncate text-[13px] font-medium">{meta.label}</p>
                     <p className="truncate text-[12px] text-muted">{log.activity || 'No details'}</p>
                   </div>
-                  {summary && <span className="num text-[13px] text-muted">{summary}</span>}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {summary && <span className="num text-[13px] text-muted">{summary}</span>}
+                    <button
+                      type="button"
+                      onClick={() => setEditingLog(log)}
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-[12px] text-muted transition-colors hover:bg-surface-2 hover:text-content"
+                      aria-label={`Edit ${meta.label} log`}
+                    >
+                      Edit
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -410,6 +451,26 @@ export default function Dashboard() {
       )}
 
       <ScanFoodModal open={scanOpen} onClose={() => setScanOpen(false)} onLogged={handleMealLogged} />
+      {targetsOpen && (
+        <MacroTargetsModal
+          targets={targets}
+          onClose={() => setTargetsOpen(false)}
+          onSaved={(saved) => {
+            setTargets(saved)
+          }}
+        />
+      )}
+      {editingLog && (
+        <EditLogModal
+          log={editingLog}
+          today={todayDate ?? editingLog.recorded_at}
+          onClose={() => setEditingLog(null)}
+          onSaved={() => {
+            setEditingLog(null)
+            void loadData()
+          }}
+        />
+      )}
       <TimezoneModal
         open={timezoneOpen}
         current={profile?.timezone ?? detectTimezone()}

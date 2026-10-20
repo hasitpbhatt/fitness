@@ -46,13 +46,14 @@ back to these.
 - Deployed app is the old pre-scan build (`850f076f`); `POST /api/fitness/scan` returns 404.
 - `fitness_logs` has **2 rows**, no duplicate `(user_id, recorded_at, type)`.
 - Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql`,
-  `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`, and
-  `0005_scan_ledger_and_welcome_slot.sql` exist in source, apply cleanly locally, and
-  are awaiting the remote window.
+  `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
+  `0005_scan_ledger_and_welcome_slot.sql`, and `0006_macro_targets.sql` exist in source,
+  apply cleanly locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 80/80.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 87/87.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
-  clarification questions, ranges, quota, manual fallback, timezone confirmation.
+  clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
+  targets/bars, editable/removable entries, and yesterday logging/correction.
 
 ### Freellm (production)
 
@@ -130,7 +131,7 @@ admin UI shipped in the member bundle.
 | C-12 | Measurements + weekly same-outfit photo compare | none | weight/waist/hips/arms history; private weekly photo compare (**P1**) |
 | C-13 | PWA install page, offline shell, forced update | DONE | manifest + icons, `/install` page, offline app-shell cache, prompted service-worker updates |
 | C-14 | Streaks, badges, daily loops, leaderboard | DONE | keep; add plan-adherence streaks when schedules land |
-| C-15 | Macro targets + macro progress + editable entries + yesterday correction | calories only | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix (**P1**) |
+| C-15 | Macro targets + macro progress + editable entries + yesterday correction | DONE | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix |
 | C-16 | Indian food DB, manual search, portion scaling, brands | AI estimate only | seed common Indian/branded foods, portions, manual add (**P1**) |
 | C-17 | AI food search returning options | text estimate only | option list + quantity scaler, reusing the scan quota (**P2**) |
 | C-18 | AI photo scan + recalculate | DONE | keep; explicit "not counted" on failure (**DONE**) |
@@ -211,20 +212,23 @@ mandatory.
    `npx wrangler pages secret put FREELLM_API_KEY --project-name fitness`.
 2. Verify with `npx wrangler pages secret list --project-name fitness`.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
-   `0004_fitness_hardening.sql`, and `0005_scan_ledger_and_welcome_slot.sql` remotely in
-   a short window.
-4. Verify tables/indexes: `fitness_profiles`, `fitness_scan_usage`, `scan_data`,
-   `fitness_scan_ledger`, `idx_fitness_logs_user_date_type` (partial),
-   `idx_user_badges_user_code`.
+   `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`, and
+   `0006_macro_targets.sql` remotely in a short window.
+4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns),
+   `fitness_scan_usage`, `scan_data`, `fitness_scan_ledger`, macro columns on
+   `fitness_logs`, partial `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`.
 5. Deploy fitness.
-6. Verify: logged-in `/api/fitness/log/today`, photo scan, text scan, re-estimate,
-   log scan, quota increments, 21st call 429, duplicate 409.
+6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
+   re-estimate, log scan with macros, edit/delete, yesterday log, quota increments,
+   21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
 - [ ] Photo → review → edit description → re-estimate → log.
 - [ ] Text → questions → fill quantities → log.
-- [ ] Manual + two scans = correct total.
+- [ ] Manual + two scans = correct total, with macros.
+- [ ] Macro targets save; today's bars reflect edits and scan totals.
+- [ ] Edit/remove today's entry; log and repair yesterday's entry.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
 - [ ] Admin/other user cannot touch this user's goals.
@@ -234,7 +238,7 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002–0005; old code ignores the ledger
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0006; old code ignores the ledger and macro columns
   and still benefits from the welcome-row index exception.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
@@ -248,7 +252,9 @@ mandatory.
 | Quota | 20 concurrent requests → 20×200, 5×429, count 20 | verify |
 | Quota refund | Upstream 5xx → count unchanged; invalid input → no charge | verify |
 | Quota day | Rotating tz hints cannot create a second budget | verify |
-| Idempotency | Same `scan_id` twice → one row/entry | verify |
+| Idempotency | Same `scan_id` twice -&gt; one row/entry | verify |
+| Macros | Targets round-trip; scan + manual macros merge | verify |
+| Corrections | Edit/delete entry; yesterday log; date window enforced | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
 | Backfill failure | Profile stays unconfirmed; retry works | verify |
@@ -385,8 +391,16 @@ The first release is done when:
   serves `/` for offline navigations, skips `/api`, and checks for a new worker hourly
   and on tab focus. A prompted in-app update banner reloads into the waiting worker.
   Typecheck/lint/build pass; manifest JSON and service-worker syntax validate.
+- **2026-10-20 - macros and corrections (C-15):** added migration
+  `0006_macro_targets.sql` (per-log protein/carbs/fat, per-profile daily targets). Scan
+  logs now store and merge macros alongside calories. Added `GET`/`PUT
+  /api/fitness/targets`, `PATCH`/`DELETE /api/fitness/log/:id`, a 7-day correction window
+  for `date`/`recorded_at`, and target columns in `/api/fitness/log/today`. The dashboard
+  shows calories/protein/carbs/fat bars with a target editor and per-entry edit/delete;
+  the log page supports Today/Yesterday, macro entry, and a yesterday entry list.
+  Fitness **87/87 checks**, typecheck, lint, build pass.
 - **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with
-  habits/macros next; land observability/cost guardrails alongside.
+  C-19 habits next; land observability/cost guardrails alongside.
 
 ## 12. Working agreement
 

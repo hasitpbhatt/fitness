@@ -317,6 +317,126 @@ try {
       .run()
   }
 
+  console.log('\n-- macros & corrections --')
+  {
+    const today = localDate(null)
+    const yesterday = addDays(today, -1)
+
+    const savedTargets = await json(
+      await call('/api/fitness/targets', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({
+          calorie_target: 2200,
+          protein_target_g: 150,
+          carbs_target_g: 240,
+          fat_target_g: 70,
+        }),
+      }),
+    )
+    check(
+      'macro targets save',
+      savedTargets.status === 200 && savedTargets.body.targets?.protein_target_g === 150,
+      JSON.stringify(savedTargets.body),
+    )
+
+    const readTargets = await json(
+      await call('/api/fitness/targets', { headers: authHeaders }),
+    )
+    check(
+      'macro targets read back',
+      readTargets.status === 200 &&
+        readTargets.body.targets?.calorie_target === 2200 &&
+        readTargets.body.targets?.fat_target_g === 70,
+      JSON.stringify(readTargets.body),
+    )
+
+    const todayWithTargets = await json(
+      await call('/api/fitness/log/today', { headers: authHeaders }),
+    )
+    check(
+      'today response includes macro targets',
+      todayWithTargets.status === 200 &&
+        todayWithTargets.body.targets?.carbs_target_g === 240,
+      JSON.stringify(todayWithTargets.body).slice(0, 250),
+    )
+
+    const created = await json(
+      await call('/api/fitness/log', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          type: 'nutrition',
+          activity: 'Dal and rice',
+          calories: 500,
+          protein_g: 22.5,
+          carbs_g: 70,
+          fat_g: 9,
+          date: yesterday,
+        }),
+      }),
+    )
+    const createdId = created.body.log?.id
+    check(
+      'nutrition log accepts yesterday + macros',
+      created.status === 200 &&
+        created.body.date === yesterday &&
+        created.body.log?.recorded_at === yesterday &&
+        created.body.log?.protein_g === 22.5,
+      JSON.stringify(created.body).slice(0, 300),
+    )
+
+    const patched = await json(
+      await call(`/api/fitness/log/${createdId}`, {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({
+          activity: 'Dal, rice, curd',
+          calories: 550,
+          protein_g: 25,
+          fat_g: 10,
+        }),
+      }),
+    )
+    check(
+      'log edit updates calories and macros',
+      patched.status === 200 &&
+        patched.body.log?.calories === 550 &&
+        patched.body.log?.protein_g === 25 &&
+        patched.body.log?.activity === 'Dal, rice, curd',
+      JSON.stringify(patched.body).slice(0, 300),
+    )
+
+    const futureEdit = await json(
+      await call(`/api/fitness/log/${createdId}`, {
+        method: 'PATCH',
+        headers: authHeaders,
+        body: JSON.stringify({ recorded_at: addDays(today, 1) }),
+      }),
+    )
+    check(
+      'log edit rejects a future date',
+      futureEdit.status === 400 && futureEdit.body.error === 'invalid_date',
+      JSON.stringify(futureEdit.body),
+    )
+
+    const deleted = await json(
+      await call(`/api/fitness/log/${createdId}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      }),
+    )
+    const gone = await db
+      .prepare('SELECT COUNT(*) AS c FROM fitness_logs WHERE id = ?')
+      .bind(createdId)
+      .first()
+    check(
+      'log delete removes the row',
+      deleted.status === 200 && deleted.body.deleted === true && gone?.c === 0,
+      JSON.stringify({ response: deleted.body, gone }),
+    )
+  }
+
   console.log('\n-- streaks & badges --')
   {
     const { status, body } = await json(await call('/api/fitness/streaks', { headers: authHeaders }))
@@ -708,8 +828,13 @@ try {
     const { status, body } = await json(await call(`/api/fitness/log/today?tz=${encodeURIComponent(tz)}`, { headers: authHeaders }))
     const nutrition = (body.logs ?? []).find((log) => log.type === 'nutrition')
     check(
-      'scanned meal appears in today logs',
-      status === 200 && nutrition?.calories === 290 && body.date === tzLocalDate,
+      'scanned meal appears in today logs with macros',
+      status === 200 &&
+        nutrition?.calories === 290 &&
+        nutrition?.protein_g === 16 &&
+        nutrition?.carbs_g === 29 &&
+        nutrition?.fat_g === 12 &&
+        body.date === tzLocalDate,
       JSON.stringify(body).slice(0, 300),
     )
   }

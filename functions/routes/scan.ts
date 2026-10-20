@@ -570,6 +570,9 @@ type NutritionRow = {
   id: string
   activity: string | null
   calories: number | null
+  protein_g: number | null
+  carbs_g: number | null
+  fat_g: number | null
   scan_data: string | null
   updated_at: number
 }
@@ -640,7 +643,7 @@ app.post('/api/fitness/log/scan', async (c) => {
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const existing = await c.env.DB.prepare(
-      "SELECT id, activity, calories, scan_data, updated_at FROM fitness_logs WHERE user_id = ? AND type = 'nutrition' AND recorded_at = ?",
+      "SELECT id, activity, calories, protein_g, carbs_g, fat_g, scan_data, updated_at FROM fitness_logs WHERE user_id = ? AND type = 'nutrition' AND recorded_at = ?",
     )
       .bind(session.userId, today)
       .first<NutritionRow>()
@@ -668,6 +671,23 @@ app.post('/api/fitness/log/scan', async (c) => {
     const baseCalories = existing ? Math.max(0, (existing.calories ?? 0) - storedScanCalories) : 0
     const nextScans = [...scans, entry]
     const calories = baseCalories + nextScans.reduce((sum, stored) => sum + stored.totals.calories, 0)
+    const macroTotal = (key: 'protein_g' | 'carbs_g' | 'fat_g', rows: LogScanEntry[]) =>
+      rows.reduce((sum, stored) => sum + stored.totals[key], 0)
+    const baseProtein = Math.max(
+      0,
+      (existing?.protein_g ?? macroTotal('protein_g', scans)) - macroTotal('protein_g', scans),
+    )
+    const baseCarbs = Math.max(
+      0,
+      (existing?.carbs_g ?? macroTotal('carbs_g', scans)) - macroTotal('carbs_g', scans),
+    )
+    const baseFat = Math.max(
+      0,
+      (existing?.fat_g ?? macroTotal('fat_g', scans)) - macroTotal('fat_g', scans),
+    )
+    const protein = round1(baseProtein + macroTotal('protein_g', nextScans))
+    const carbs = round1(baseCarbs + macroTotal('carbs_g', nextScans))
+    const fat = round1(baseFat + macroTotal('fat_g', nextScans))
     const scanData = JSON.stringify({ source: 'scan', scans: nextScans })
     const computedActivity =
       scansBefore === 0
@@ -678,13 +698,27 @@ app.post('/api/fitness/log/scan', async (c) => {
     const id = existing?.id ?? newId()
     const logStatement = existing
       ? c.env.DB.prepare(
-          'UPDATE fitness_logs SET scan_data = ?, calories = ?, activity = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
-        ).bind(scanData, calories, activity, now, existing.id, existing.updated_at)
+          `UPDATE fitness_logs
+           SET scan_data = ?, calories = ?, protein_g = ?, carbs_g = ?, fat_g = ?, activity = ?, updated_at = ?
+           WHERE id = ? AND updated_at = ?`,
+        ).bind(scanData, calories, protein, carbs, fat, activity, now, existing.id, existing.updated_at)
       : c.env.DB.prepare(
           `INSERT OR IGNORE INTO fitness_logs
-             (id, user_id, type, recorded_at, activity, calories, scan_data, created_at, updated_at)
-           VALUES (?, ?, 'nutrition', ?, ?, ?, ?, ?, ?)`,
-        ).bind(id, session.userId, today, activity, calories, scanData, now, now)
+             (id, user_id, type, recorded_at, activity, calories, protein_g, carbs_g, fat_g, scan_data, created_at, updated_at)
+           VALUES (?, ?, 'nutrition', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          id,
+          session.userId,
+          today,
+          activity,
+          calories,
+          protein,
+          carbs,
+          fat,
+          scanData,
+          now,
+          now,
+        )
 
     let result
     try {
@@ -766,6 +800,12 @@ app.post('/api/fitness/log/scan/undo', async (c) => {
     }
     const remaining = scans.filter((entry) => entry.scan_id !== scanId)
     const nextCalories = Math.max(0, (row.calories ?? 0) - removed.totals.calories)
+    const currentProtein = row.protein_g ?? scans.reduce((sum, entry) => sum + entry.totals.protein_g, 0)
+    const currentCarbs = row.carbs_g ?? scans.reduce((sum, entry) => sum + entry.totals.carbs_g, 0)
+    const currentFat = row.fat_g ?? scans.reduce((sum, entry) => sum + entry.totals.fat_g, 0)
+    const nextProtein = round1(Math.max(0, currentProtein - removed.totals.protein_g))
+    const nextCarbs = round1(Math.max(0, currentCarbs - removed.totals.carbs_g))
+    const nextFat = round1(Math.max(0, currentFat - removed.totals.fat_g))
     const scanGenerated =
       /^Meal: /.test(row.activity ?? '') || /^\d+ meals? today$/.test(row.activity ?? '')
 
@@ -804,10 +844,15 @@ app.post('/api/fitness/log/scan/undo', async (c) => {
 
     const updated = await c.env.DB.batch([
       c.env.DB.prepare(
-        'UPDATE fitness_logs SET scan_data = ?, calories = ?, activity = ?, updated_at = ? WHERE id = ? AND updated_at = ?',
+        `UPDATE fitness_logs
+         SET scan_data = ?, calories = ?, protein_g = ?, carbs_g = ?, fat_g = ?, activity = ?, updated_at = ?
+         WHERE id = ? AND updated_at = ?`,
       ).bind(
         remaining.length > 0 ? JSON.stringify({ source: 'scan', scans: remaining }) : null,
         nextCalories,
+        nextProtein,
+        nextCarbs,
+        nextFat,
         activity,
         now,
         row.id,
