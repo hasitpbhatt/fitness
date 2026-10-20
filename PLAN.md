@@ -94,7 +94,6 @@ significant risk · **P2** medium · **P3** polish. Status: `OPEN`, `NOW`, `NEXT
 | ID | Sev | Issue | Status |
 | --- | --- | --- | --- |
 | R-06 | P1 | Under-reserved vision requests can be delivered and then fail settlement for free. | **PARTIAL** (reserve is 3000/image; exact per-image metering still future) |
-| R-15 | P3 | Upstream 30s timeout + non-stream fallback can approach fitness's 60s abort. | **OPEN** |
 
 ---
 
@@ -102,17 +101,15 @@ significant risk · **P2** medium · **P3** polish. Status: `OPEN`, `NOW`, `NEXT
 
 ### 5.1 Hardening (current deploy gate)
 
-1. **Timeout budget (R-15).** Align upstream and fitness timeouts; consider streaming for
-   scans or a shorter max token budget.
-2. **Cross-midnight retry (F-10).** Add a scan ledger so a retried `scan_id` cannot log
+1. **Cross-midnight retry (F-10).** Add a scan ledger so a retried `scan_id` cannot log
    twice after midnight.
-3. **Welcome slot (F-11).** Keep the signup welcome row from consuming the same day's
+2. **Welcome slot (F-11).** Keep the signup welcome row from consuming the same day's
    `custom` slot.
-4. **Observability.** Count scan requests by phase/status/model, quota hits, p50/p95
+3. **Observability.** Count scan requests by phase/status/model, quota hits, p50/p95
    latency, token cost per scan, and upstream 429/5xx by provider/key.
-5. **Cost guardrails.** Alert on daily AI spend; cap the shared token's aggregate burn;
+4. **Cost guardrails.** Alert on daily AI spend; cap the shared token's aggregate burn;
    record image-token usage per request (finishes R-06).
-6. **Shared-DB guardrails.** Document cascade risk; require a fitness-data check before
+5. **Shared-DB guardrails.** Document cascade risk; require a fitness-data check before
    any `freellm_users` rebuild; never restore D1 time travel casually.
 
 ### 5.2 Competitor parity (FitJam audit)
@@ -171,7 +168,7 @@ admin UI shipped in the member bundle.
 
 ### 5.3 Parity sequence
 
-1. **Finish the deploy gate first:** R-15, F-10, F-11. No parity work should delay
+1. **Finish the deploy gate first:** F-10, F-11. No parity work should delay
    the already-hardened meal-scan release.
 2. **Wave 1 — daily app:** C-13 PWA, C-14/C-19 habits, C-15 macros, C-12 measurements,
    C-16 food DB, C-17 AI search, C-23/C-24 notifications, C-21 coach, C-26 meal plan,
@@ -377,8 +374,14 @@ The first release is done when:
   the newest 8 images, and reports how many older ones were left out. Chat now shows an
   explicit warning (with the text-history reassurance) instead of silently omitting them.
   Added two unit tests. Freellm **242/242 tests**, typecheck, lint, build pass.
-- **Next:** finish the remaining P3 hardening (R-15, F-10/F-11), request deploy
-  permission (runbook order), run live acceptance, then start parity Wave 1.
+- **2026-10-20 - bounded non-stream failover:** `/v1/chat/completions` now gives a
+  non-streaming request a 50s total deadline, shared across every provider/key attempt and
+  the streaming-to-JSON fallback. That leaves 10s of headroom inside fitness's 60s abort,
+  so the client no longer gives up while freellm is still retrying. Added a two-config
+  regression test proving the second config is never dialed after the deadline. Freellm
+  **243/243 tests**, typecheck, lint, build pass.
+- **Next:** finish F-10/F-11, request deploy permission (runbook order), run live
+  acceptance, then start parity Wave 1.
 
 ## 12. Working agreement
 
