@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import authRoutes from '../../functions/routes/auth'
 import fitnessRoutes from '../../functions/routes/fitness'
 import habitRoutes from '../../functions/routes/habits'
+import measurementRoutes from '../../functions/routes/measurements'
 import profileRoutes from '../../functions/routes/profile'
 import scanRoutes from '../../functions/routes/scan'
 import type { Bindings } from '../../functions/lib/types'
@@ -22,6 +23,7 @@ app.get('/api/health', async (c) => {
 app.route('/', authRoutes)
 app.route('/', fitnessRoutes)
 app.route('/', habitRoutes)
+app.route('/', measurementRoutes)
 app.route('/', profileRoutes)
 app.route('/', scanRoutes)
 

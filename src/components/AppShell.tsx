@@ -8,6 +8,7 @@ import { MobileMenu } from './nav/MobileMenu'
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/log', label: 'Log' },
+  { to: '/measurements', label: 'Measurements' },
   { to: '/achievements', label: 'Achievements' },
   { to: '/leaderboard', label: 'Leaderboard' },
 ]

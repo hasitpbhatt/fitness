@@ -1377,6 +1377,94 @@ try {
     check('quick habit rejects unsupported habits -> 400', bad.status === 400 && bad.body.error === 'invalid_habit')
   }
 
+  console.log('\n-- measurements --')
+  {
+    const created = await json(
+      await call('/api/fitness/measurements', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ weight_kg: 80, waist_cm: 90, note: 'Morning' }),
+      }),
+    )
+    const measurement = created.body.measurement
+    const measurementDay = measurement?.recorded_at
+    check(
+      'measurement create returns the saved row',
+      created.status === 200 &&
+        measurement?.weight_kg === 80 &&
+        measurement?.waist_cm === 90 &&
+        measurement?.note === 'Morning',
+      JSON.stringify(created.body),
+    )
+
+    const updated = await json(
+      await call('/api/fitness/measurements', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ date: measurementDay, weight_kg: 79.5 }),
+      }),
+    )
+    check(
+      'measurement upsert preserves fields that were omitted',
+      updated.status === 200 &&
+        updated.body.measurement?.id === measurement?.id &&
+        updated.body.measurement?.weight_kg === 79.5 &&
+        updated.body.measurement?.waist_cm === 90 &&
+        updated.body.measurement?.note === 'Morning',
+      JSON.stringify(updated.body),
+    )
+
+    const listed = await json(
+      await call('/api/fitness/measurements', { headers: authHeaders }),
+    )
+    check(
+      'measurement history lists the row',
+      listed.status === 200 &&
+        listed.body.measurements?.length === 1 &&
+        listed.body.measurements?.[0]?.weight_kg === 79.5,
+      JSON.stringify(listed.body).slice(0, 300),
+    )
+
+    const invalid = await json(
+      await call('/api/fitness/measurements', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ weight_kg: 999 }),
+      }),
+    )
+    check('measurement rejects out-of-range values -> 400', invalid.status === 400)
+
+    const future = await json(
+      await call('/api/fitness/measurements', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ date: addDays(measurementDay, 1), weight_kg: 80 }),
+      }),
+    )
+    check('measurement rejects a future date -> 400', future.status === 400)
+
+    const empty = await json(
+      await call('/api/fitness/measurements', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ note: 'no numbers' }),
+      }),
+    )
+    check('measurement requires at least one value -> 400', empty.status === 400)
+
+    const removed = await json(
+      await call(`/api/fitness/measurements/${measurement?.id}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      }),
+    )
+    check('measurement delete removes the row', removed.status === 200 && removed.body.deleted === true)
+  }
+  {
+    const unauthorized = await json(await call('/api/fitness/measurements'))
+    check('measurements without cookie -> 401', unauthorized.status === 401)
+  }
+
   console.log('\n-- guard & logout --')
   {
     const { status } = await json(await call('/api/fitness/log/today'))

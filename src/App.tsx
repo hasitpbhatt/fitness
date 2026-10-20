@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Log from './pages/Log'
 import Achievements from './pages/Achievements'
 import Leaderboard from './pages/Leaderboard'
+import Measurements from './pages/Measurements'
 import Install from './pages/Install'
 import NotFound from './pages/NotFound'
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt'
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/log" element={<Log />} />
           <Route path="/achievements" element={<Achievements />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/measurements" element={<Measurements />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

@@ -98,6 +98,19 @@ export type MacroTotals = {
   fat_g: number
 }
 
+export type Measurement = {
+  id: string
+  user_id: string
+  recorded_at: string
+  weight_kg: number | null
+  waist_cm: number | null
+  hips_cm: number | null
+  arms_cm: number | null
+  note: string | null
+  created_at: number
+  updated_at: number
+}
+
 export type HabitKey = 'water' | 'protein' | 'sleep' | 'stretch'
 
 export type HabitDay = {
