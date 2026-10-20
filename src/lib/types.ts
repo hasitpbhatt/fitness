@@ -111,6 +111,17 @@ export type Food = {
   portion_label: string | null
 }
 
+export type FoodOption = {
+  name: string
+  description: string
+  portion_g: number
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  confidence: number
+}
+
 export type Measurement = {
   id: string
   user_id: string

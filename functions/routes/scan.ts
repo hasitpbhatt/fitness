@@ -4,6 +4,7 @@
 // Flow:
 //   POST /api/fitness/scan          photo data URI -> detected items + totals
 //   POST /api/fitness/scan/text     written description -> likely ingredients
+//   POST /api/fitness/scan/suggest  food query -> scaled option list
 //   POST /api/fitness/scan/refine   corrected description -> rebuilt estimate
 //   POST /api/fitness/log/scan      confirmed items -> today's nutrition log
 //
@@ -57,6 +58,18 @@ const TEXT_REBUILD_RULES = `You are rebuilding an estimate from a corrected meal
 - Use typical portions when the description does not state them, and ask the user to fill in the most important missing quantities.
 - Keep items the description does not contradict, but recompute every total.`
 
+const FOOD_OPTIONS_PROMPT = `You are a nutrition food-search assistant. Return ONLY valid JSON with no markdown and no explanations, matching this schema exactly:
+{"options":[{"name":string,"description":string,"portion_g":number,"calories":number,"protein_g":number,"carbs_g":number,"fat_g":number,"confidence":number}]}
+Rules:
+- Return 3-5 distinct options that match the query, ordered from the most likely match.
+- name is a short food or dish name, e.g. "Chapati" or "Paneer butter masala".
+- description is a short portion label, e.g. "1 medium roti, 40 g" or "1 cup, 240 g".
+- portion_g is the edible weight in grams for that described portion.
+- calories, protein_g, carbs_g, and fat_g are for that portion, not per 100 g.
+- Prefer common Indian foods, dishes, and brands. Use typical values.
+- If the query is vague, offer plausible variants or portion sizes. Do not invent exact brand nutrition.
+- confidence is 0..1. Never return more than 5 options.`
+
 type ScanItem = {
   name: string
   qty: number
@@ -80,6 +93,17 @@ type ScanTotals = {
 }
 
 type ScanQuestion = { item_name?: string; question: string }
+
+type FoodOption = {
+  name: string
+  description: string
+  portion_g: number
+  calories: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  confidence: number
+}
 
 type Quota = { used: number; limit: number }
 
@@ -206,6 +230,35 @@ function normalizeResult(
     questions,
     model,
   }
+}
+
+function normalizeFoodOptions(raw: unknown): FoodOption[] | null {
+  if (!raw || typeof raw !== 'object') return null
+  const entries = (raw as { options?: unknown }).options
+  if (!Array.isArray(entries)) return null
+  const options: FoodOption[] = []
+  for (const entry of entries.slice(0, 5)) {
+    if (!entry || typeof entry !== 'object') continue
+    const option = entry as Record<string, unknown>
+    const name = typeof option.name === 'string' ? option.name.trim().slice(0, 100) : ''
+    if (!name) continue
+    const portionG = Math.round(numberIn(option.portion_g, 1, 5_000, 100))
+    const calories = Math.round(numberIn(option.calories, 0, 20_000, 0))
+    options.push({
+      name,
+      description:
+        typeof option.description === 'string' && option.description.trim()
+          ? option.description.trim().slice(0, 160)
+          : `${portionG} g portion`,
+      portion_g: portionG,
+      calories,
+      protein_g: round1(numberIn(option.protein_g, 0, 2_000, 0)),
+      carbs_g: round1(numberIn(option.carbs_g, 0, 2_000, 0)),
+      fat_g: round1(numberIn(option.fat_g, 0, 2_000, 0)),
+      confidence: round1(numberIn(option.confidence, 0, 1, 0.5)),
+    })
+  }
+  return options
 }
 
 /** Pulls the first JSON object out of a model reply, tolerating fences or prose. */
@@ -472,6 +525,60 @@ app.post('/api/fitness/scan/text', async (c) => {
     )
   }
   return c.json({ ...result, quota })
+})
+
+// ------------------------------------------------------------- food search
+
+app.post('/api/fitness/scan/suggest', async (c) => {
+  const session = await getSession(c.env.fitness_sessions, c.req.header('cookie') ?? null)
+  if (!session) return c.json({ error: 'unauthorized' }, 401)
+
+  const body = await c.req.json<{ query?: unknown }>().catch(() => null)
+  const query = typeof body?.query === 'string' ? body.query.trim() : ''
+  if (query.length < 2 || query.length > 120) {
+    return c.json(
+      { error: 'invalid_query', message: 'Search for a food in 2-120 characters.' },
+      400,
+    )
+  }
+  if (!c.env.FREELLM_API_KEY) {
+    return c.json({ error: 'upstream_error', message: 'AI food search is not set up yet.' }, 503)
+  }
+
+  const date = await quotaDate(c.env, session.userId)
+  const { quota, allowed } = await consumeScanQuota(c.env, session.userId, date)
+  if (!allowed) {
+    return c.json(
+      {
+        error: 'rate_limited',
+        message: `You've used all ${SCANS_PER_DAY} AI meal estimates for today - try again tomorrow.`,
+        quota,
+      },
+      429,
+    )
+  }
+
+  const model = c.env.FREELLM_TEXT_MODEL ?? DEFAULT_TEXT_MODEL
+  const messages = [
+    { role: 'system', content: FOOD_OPTIONS_PROMPT },
+    { role: 'user', content: `Food query: ${query}\n\nReturn 3-5 options with a typical portion and its nutrition.` },
+  ]
+
+  const upstream = await callFreellm(c.env, model, messages, 900)
+  if (!upstream.ok) {
+    await refundScanQuota(c.env, session.userId, date)
+    return c.json({ error: 'upstream_error', message: upstream.message }, upstream.status)
+  }
+
+  const options = normalizeFoodOptions(extractJson(upstream.content))
+  if (!options) {
+    await refundScanQuota(c.env, session.userId, date)
+    return c.json(
+      { error: 'invalid_model_output', message: "Couldn't find food options. Try another search." },
+      502,
+    )
+  }
+  return c.json({ query, options, quota })
 })
 
 // ---------------------------------------------------------------- refine

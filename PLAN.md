@@ -51,12 +51,12 @@ back to these.
   `0008_measurements.sql`, and `0009_foods.sql` exist in source, apply cleanly locally,
   and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 111/111.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 114/114.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
   with quick-add chips plus a 7-day strip, weight/waist/hips/arms history, and a seeded
-  food database with portion scaling and manual entry.
+  food database with portion scaling, manual entry, and AI food search options.
 
 ### Freellm (production)
 
@@ -136,7 +136,7 @@ admin UI shipped in the member bundle.
 | C-14 | Streaks, badges, daily loops, leaderboard | DONE | keep; add plan-adherence streaks when schedules land |
 | C-15 | Macro targets + macro progress + editable entries + yesterday correction | DONE | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix |
 | C-16 | Indian food DB, manual search, portion scaling, brands | DONE | 62 seeded Indian/branded foods, search, portion scaling, manual nutrition entry |
-| C-17 | AI food search returning options | text estimate only | option list + quantity scaler, reusing the scan quota (**P2**) |
+| C-17 | AI food search returning options | DONE | option list with portions, quantity scaler, shares the scan quota |
 | C-18 | AI photo scan + recalculate | DONE | keep; explicit "not counted" on failure (**DONE**) |
 | C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | DONE | water/protein/sleep rollup, stretch quick-add, chips, 7-day strip |
 | C-20 | Human food-photo review queue / community-approved DB | none | pending/approve/merge queue (**P3**) |
@@ -237,6 +237,7 @@ mandatory.
 - [ ] Habit chips add water/protein/stretch; 7-day strip reflects them.
 - [ ] Measurement save/update/delete persists and keeps omitted fields.
 - [ ] Food search finds seeds/brands; portion scaling and manual entry add nutrition.
+- [ ] AI food search returns options, scales the chosen portion, and spends one estimate.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
 - [ ] Admin/other user cannot touch this user's goals.
@@ -267,6 +268,7 @@ mandatory.
 | Habits | Quick-add water/protein/stretch; 7-day rollup and targets | verify |
 | Measurements | Upsert keeps omitted fields; history/delete; date window | verify |
 | Foods | Seeded search, brands, portion math, manual add, merge into day | verify |
+| AI food search | Option normalization, quota spend/refund, model prompt | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
 | Backfill failure | Profile stays unconfirmed; retry works | verify |
@@ -432,9 +434,15 @@ The first release is done when:
   manual nutrition entry merges into the day's nutrition row. Added a `/foods` page with
   search, a scaled-nutrition panel, and manual entry, plus desktop/mobile navigation.
   Fitness **111/111 checks**, typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-17
-  AI food search next; C-12 photo compare waits on private storage approval. Land
-  observability/cost guardrails alongside.
+- **2026-10-20 - AI food search (C-17):** added `POST /api/fitness/scan/suggest`, which
+  asks the text model for 3-5 portion-aware food options and shares the daily scan
+  quota. The `/foods` page can switch between database and AI results, then scale the
+  chosen option before logging it as a manual nutrition entry. Invalid queries are
+  rejected, failed upstream calls refund the quota, and an unconfigured gateway returns
+  503. Fitness **114/114 checks**, typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with
+  C-23/C-24 notifications next; C-12 photo compare waits on private storage approval.
+  Land observability/cost guardrails alongside.
 
 ## 12. Working agreement
 

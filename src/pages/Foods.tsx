@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Button, Card, Input } from '../components/ui'
-import type { Food } from '../lib/types'
+import type { Food, FoodOption } from '../lib/types'
 
 type ManualForm = {
   name: string
@@ -31,6 +31,23 @@ function fetchFoods(query: string) {
   return api.get<{ foods: Food[] }>(`/fitness/foods${suffix}`)
 }
 
+function optionToFood(option: FoodOption, index: number): Food {
+  const portion = Math.max(option.portion_g, 1)
+  const factor = 100 / portion
+  return {
+    id: `ai:${index}`,
+    name: option.name,
+    brand: option.description,
+    category: 'AI estimate',
+    per_100g_calories: Math.round(option.calories * factor * 10) / 10,
+    per_100g_protein_g: Math.round(option.protein_g * factor * 10) / 10,
+    per_100g_carbs_g: Math.round(option.carbs_g * factor * 10) / 10,
+    per_100g_fat_g: Math.round(option.fat_g * factor * 10) / 10,
+    default_portion_g: portion,
+    portion_label: option.description,
+  }
+}
+
 export default function Foods() {
   const { user, loading } = useAuth()
   const [query, setQuery] = useState('')
@@ -40,6 +57,8 @@ export default function Foods() {
   const [manual, setManual] = useState<ManualForm>(EMPTY_MANUAL)
   const [busy, setBusy] = useState(false)
   const [searching, setSearching] = useState(false)
+  const [aiSearching, setAiSearching] = useState(false)
+  const [source, setSource] = useState<'db' | 'ai'>('db')
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -84,10 +103,43 @@ export default function Foods() {
     try {
       const result = await fetchFoods(query)
       setResults(result.foods)
+      setSelected(null)
+      setSource('db')
     } catch {
       setError('Could not search foods.')
     } finally {
       setSearching(false)
+    }
+  }
+
+  const aiSearch = async () => {
+    const searchQuery = query.trim()
+    if (searchQuery.length < 2) {
+      setError('Type at least 2 characters to search with AI.')
+      return
+    }
+    setAiSearching(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const result = await api.post<{
+        options: FoodOption[]
+        quota?: { used: number; limit: number }
+      }>('/fitness/scan/suggest', { query: searchQuery })
+      setResults(result.options.map(optionToFood))
+      setSelected(null)
+      setSource('ai')
+      setMessage(
+        result.options.length === 0
+          ? 'No AI matches. Try a different search or add it manually.'
+          : `AI found ${result.options.length} options${
+              result.quota ? ` · ${result.quota.used}/${result.quota.limit} estimates used today` : ''
+            }.`,
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Could not search with AI.')
+    } finally {
+      setAiSearching(false)
     }
   }
 
@@ -110,7 +162,7 @@ export default function Foods() {
     : null
 
   const logFood = async () => {
-    if (!selected) return
+    if (!selected || !portion) return
     if (!Number.isFinite(gramsNumber) || gramsNumber <= 0 || gramsNumber > 5_000) {
       setError('Enter a portion between 1 and 5,000 g.')
       return
@@ -119,10 +171,18 @@ export default function Foods() {
     setError(null)
     setMessage(null)
     try {
-      const result = await api.post<{ item: { calories: number } }>('/fitness/foods/log', {
-        food_id: selected.id,
-        grams: gramsNumber,
-      })
+      const payload = selected.id.startsWith('ai:')
+        ? {
+            manual: {
+              name: selected.name,
+              calories: portion.calories,
+              protein_g: portion.protein,
+              carbs_g: portion.carbs,
+              fat_g: portion.fat,
+            },
+          }
+        : { food_id: selected.id, grams: gramsNumber }
+      const result = await api.post<{ item: { calories: number } }>('/fitness/foods/log', payload)
       setMessage(`Added about ${result.item.calories} kcal to today.`)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not log that food.')
@@ -175,15 +235,32 @@ export default function Foods() {
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
-          <form onSubmit={(event) => void search(event)} className="flex gap-2 border-b border-line px-4 py-3">
+          <form onSubmit={(event) => void search(event)} className="flex flex-wrap gap-2 border-b border-line px-4 py-3">
             <Input
+              className="min-w-[12rem] flex-1"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search roti, dal, paneer, Amul..."
               aria-label="Search foods"
             />
             <Button type="submit" loading={searching}>Search</Button>
+            <Button
+              type="button"
+              variant="secondary"
+              loading={aiSearching}
+              onClick={() => void aiSearch()}
+            >
+              AI search
+            </Button>
           </form>
+          <p className="border-b border-line px-4 py-2 text-[11px] text-muted">
+            AI search shares your daily meal-estimate quota.
+          </p>
+          {source === 'ai' && results && results.length > 0 && (
+            <p className="border-b border-line bg-surface-2 px-4 py-2 text-[11px] text-muted">
+              AI estimates · choose an option, then adjust the portion.
+            </p>
+          )}
           <div className="max-h-[28rem] overflow-y-auto">
             {results === null ? (
               <div className="flex flex-col gap-2 p-4">

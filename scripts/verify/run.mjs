@@ -778,6 +778,26 @@ try {
     )
     check('text estimate without API key -> 503', status === 503 && body.error === 'upstream_error', JSON.stringify(body))
   }
+  {
+    const { status, body } = await json(
+      await call('/api/fitness/scan/suggest', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ query: 'x' }),
+      }),
+    )
+    check('AI food search rejects too-short query -> 400', status === 400 && body.error === 'invalid_query', JSON.stringify(body))
+  }
+  {
+    const { status, body } = await json(
+      await call('/api/fitness/scan/suggest', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ query: 'roti' }),
+      }),
+    )
+    check('AI food search without API key -> 503', status === 503 && body.error === 'upstream_error', JSON.stringify(body))
+  }
   const scanId = 'scan-verify-1'
   const scanItems = [
     { name: 'Toast', qty: 2, unit: 'slices', calories: 150, protein_g: 4, fat_g: 2, carbs_g: 28, confidence: 0.9 },
@@ -1235,6 +1255,53 @@ try {
           /try again/i.test(busy.body.message ?? '') &&
           afterBusy.body.quota?.used === 3,
         JSON.stringify({ busy: busy.body, quota: afterBusy.body }),
+      )
+
+      scenarios.push({
+        body: completion({
+          options: [
+            {
+              name: 'Chapati',
+              description: '1 medium roti, 40 g',
+              portion_g: 40,
+              calories: 120,
+              protein_g: 3.2,
+              carbs_g: 22,
+              fat_g: 2.5,
+              confidence: 0.8,
+            },
+            {
+              name: 'Butter chapati',
+              description: '1 medium roti with butter, 45 g',
+              portion_g: 45,
+              calories: 165,
+              protein_g: 3.4,
+              carbs_g: 22,
+              fat_g: 6.5,
+              confidence: 0.7,
+            },
+          ],
+        }),
+      })
+      const suggested = await json(
+        await callScan('/api/fitness/scan/suggest', {
+          method: 'POST',
+          headers: scanHeaders,
+          body: JSON.stringify({ query: 'roti' }),
+        }),
+      )
+      const suggestCall = upstreamCalls[5]
+      check(
+        'AI food search returns scaled options and spends one estimate',
+        suggested.status === 200 &&
+          suggested.body.options?.length === 2 &&
+          suggested.body.options[0]?.portion_g === 40 &&
+          suggested.body.options[0]?.calories === 120 &&
+          suggested.body.quota?.used === 4 &&
+          suggestCall?.body?.model === 'nemotron-3-ultra-550b-a55b' &&
+          /food-search/i.test(suggestCall?.body?.messages?.[0]?.content ?? '') &&
+          /roti/i.test(suggestCall?.body?.messages?.[1]?.content ?? ''),
+        JSON.stringify({ body: suggested.body, model: suggestCall?.body?.model }),
       )
 
       const logged = await json(
