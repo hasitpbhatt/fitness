@@ -30,6 +30,7 @@ export function MobileMenu({ open, onClose }: { open: boolean; onClose: () => vo
           <Link to="/log" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Log</Link>
           <Link to="/achievements" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Achievements</Link>
           <Link to="/leaderboard" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Leaderboard</Link>
+          <Link to="/install" onClick={onClose} className="px-3 py-2 text-[13px] text-muted hover:bg-surface-2 hover:text-content rounded-lg">Install app</Link>
         </nav>
       </div>
     </div>

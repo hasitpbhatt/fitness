@@ -128,7 +128,7 @@ admin UI shipped in the member bundle.
 | C-10 | Workout comments/community | leaderboard + badges only | comments/cheers with moderation; keep the public leaderboard lead (**P2**) |
 | C-11 | Fitness Reset education (Eat Smart / Move Smart) | none | curated video/article library with completion (**P3**) |
 | C-12 | Measurements + weekly same-outfit photo compare | none | weight/waist/hips/arms history; private weekly photo compare (**P1**) |
-| C-13 | PWA install page, offline shell, forced update | plain SPA | manifest, install page, service worker, update-required prompt (**P1**) |
+| C-13 | PWA install page, offline shell, forced update | DONE | manifest + icons, `/install` page, offline app-shell cache, prompted service-worker updates |
 | C-14 | Streaks, badges, daily loops, leaderboard | DONE | keep; add plan-adherence streaks when schedules land |
 | C-15 | Macro targets + macro progress + editable entries + yesterday correction | calories only | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix (**P1**) |
 | C-16 | Indian food DB, manual search, portion scaling, brands | AI estimate only | seed common Indian/branded foods, portions, manual add (**P1**) |
@@ -379,8 +379,14 @@ The first release is done when:
   ledger in one D1 batch; a retry after local midnight returns the original `log_id`
   instead of adding a second meal, and undo clears the ledger so a corrected re-log works.
   Verify covers both edges. Fitness **80/80 checks**, typecheck, lint, build pass.
-- **Next:** request deploy permission (runbook order), run live acceptance, then start
-  parity Wave 1 while landing observability/cost guardrails.
+- **2026-10-20 - PWA shell (C-13):** added a root-scoped manifest, 192/512/maskable icons,
+  Apple touch icon/theme metadata, and a `/install` page with the native install prompt
+  plus iOS/Android/desktop fallback instructions. A service worker caches the app shell,
+  serves `/` for offline navigations, skips `/api`, and checks for a new worker hourly
+  and on tab focus. A prompted in-app update banner reloads into the waiting worker.
+  Typecheck/lint/build pass; manifest JSON and service-worker syntax validate.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with
+  habits/macros next; land observability/cost guardrails alongside.
 
 ## 12. Working agreement
 

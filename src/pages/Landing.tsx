@@ -20,7 +20,10 @@ export default function Landing() {
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <Link to="/login" className="btn-primary px-8 py-3 text-sm font-medium">
-            Start Logging →
+            Start Logging �+' 
+          </Link>
+          <Link to="/install" className="btn-secondary px-8 py-3 text-sm font-medium">
+            Install app
           </Link>
         </div>
       </section>
