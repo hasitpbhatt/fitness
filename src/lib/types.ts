@@ -98,6 +98,19 @@ export type MacroTotals = {
   fat_g: number
 }
 
+export type Food = {
+  id: string
+  name: string
+  brand: string | null
+  category: string | null
+  per_100g_calories: number
+  per_100g_protein_g: number
+  per_100g_carbs_g: number
+  per_100g_fat_g: number
+  default_portion_g: number
+  portion_label: string | null
+}
+
 export type Measurement = {
   id: string
   user_id: string

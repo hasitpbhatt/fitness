@@ -1465,6 +1465,104 @@ try {
     check('measurements without cookie -> 401', unauthorized.status === 401)
   }
 
+  console.log('\n-- food database --')
+  {
+    const search = await json(
+      await call('/api/fitness/foods?q=roti', { headers: authHeaders }),
+    )
+    check(
+      'food search finds seeded Indian foods',
+      search.status === 200 &&
+        search.body.foods?.some((food) => food.id === 'seed-chapati'),
+      JSON.stringify(search.body).slice(0, 300),
+    )
+
+    const brand = await json(
+      await call('/api/fitness/foods?q=amul', { headers: authHeaders }),
+    )
+    check(
+      'food search matches brands',
+      brand.status === 200 && brand.body.foods?.some((food) => food.brand === 'Amul'),
+      JSON.stringify(brand.body).slice(0, 300),
+    )
+
+    const before = await json(await call('/api/fitness/log/today', { headers: authHeaders }))
+    const caloriesBefore = (before.body.logs ?? [])
+      .filter((log) => log.type === 'nutrition')
+      .reduce((sum, log) => sum + (log.calories ?? 0), 0)
+
+    const logged = await json(
+      await call('/api/fitness/foods/log', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ food_id: 'seed-chapati', grams: 80 }),
+      }),
+    )
+    check(
+      'portion scaling computes food nutrition',
+      logged.status === 200 &&
+        logged.body.item?.calories === 240 &&
+        logged.body.item?.protein_g === 8,
+      JSON.stringify(logged.body).slice(0, 300),
+    )
+
+    const afterFood = await json(await call('/api/fitness/log/today', { headers: authHeaders }))
+    const caloriesAfterFood = (afterFood.body.logs ?? [])
+      .filter((log) => log.type === 'nutrition')
+      .reduce((sum, log) => sum + (log.calories ?? 0), 0)
+    check(
+      'food log adds to the day nutrition total',
+      caloriesAfterFood === caloriesBefore + 240,
+      JSON.stringify({ caloriesBefore, caloriesAfterFood }),
+    )
+
+    const manual = await json(
+      await call('/api/fitness/foods/log', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({
+          manual: { name: 'Test thali', calories: 400, protein_g: 20, carbs_g: 50, fat_g: 10 },
+        }),
+      }),
+    )
+    check(
+      'manual food entry adds nutrition',
+      manual.status === 200 && manual.body.item?.calories === 400,
+      JSON.stringify(manual.body).slice(0, 300),
+    )
+
+    const missing = await json(
+      await call('/api/fitness/foods/log', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ food_id: 'missing-food', grams: 100 }),
+      }),
+    )
+    check('unknown food -> 404', missing.status === 404)
+
+    const badPortion = await json(
+      await call('/api/fitness/foods/log', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ food_id: 'seed-chapati', grams: 0 }),
+      }),
+    )
+    check('food log rejects a zero portion -> 400', badPortion.status === 400)
+
+    const future = await json(
+      await call('/api/fitness/foods/log', {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ food_id: 'seed-chapati', grams: 80, date: addDays(logged.body.date, 1) }),
+      }),
+    )
+    check('food log rejects a future date -> 400', future.status === 400)
+  }
+  {
+    const unauthorized = await json(await call('/api/fitness/foods'))
+    check('food search without cookie -> 401', unauthorized.status === 401)
+  }
+
   console.log('\n-- guard & logout --')
   {
     const { status } = await json(await call('/api/fitness/log/today'))

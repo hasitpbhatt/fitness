@@ -3,6 +3,7 @@ import AppShell from './components/AppShell'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Foods from './pages/Foods'
 import Log from './pages/Log'
 import Achievements from './pages/Achievements'
 import Leaderboard from './pages/Leaderboard'
@@ -22,6 +23,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/log" element={<Log />} />
+          <Route path="/foods" element={<Foods />} />
           <Route path="/achievements" element={<Achievements />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/measurements" element={<Measurements />} />

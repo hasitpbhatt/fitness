@@ -48,14 +48,15 @@ back to these.
 - Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql`,
   `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
   `0005_scan_ledger_and_welcome_slot.sql`, `0006_macro_targets.sql`, `0007_habits.sql`,
-  and `0008_measurements.sql` exist in source, apply cleanly locally, and are awaiting
-  the remote window.
+  `0008_measurements.sql`, and `0009_foods.sql` exist in source, apply cleanly locally,
+  and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 102/102.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 111/111.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
-  with quick-add chips plus a 7-day strip, and weight/waist/hips/arms history.
+  with quick-add chips plus a 7-day strip, weight/waist/hips/arms history, and a seeded
+  food database with portion scaling and manual entry.
 
 ### Freellm (production)
 
@@ -134,7 +135,7 @@ admin UI shipped in the member bundle.
 | C-13 | PWA install page, offline shell, forced update | DONE | manifest + icons, `/install` page, offline app-shell cache, prompted service-worker updates |
 | C-14 | Streaks, badges, daily loops, leaderboard | DONE | keep; add plan-adherence streaks when schedules land |
 | C-15 | Macro targets + macro progress + editable entries + yesterday correction | DONE | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix |
-| C-16 | Indian food DB, manual search, portion scaling, brands | AI estimate only | seed common Indian/branded foods, portions, manual add (**P1**) |
+| C-16 | Indian food DB, manual search, portion scaling, brands | DONE | 62 seeded Indian/branded foods, search, portion scaling, manual nutrition entry |
 | C-17 | AI food search returning options | text estimate only | option list + quantity scaler, reusing the scan quota (**P2**) |
 | C-18 | AI photo scan + recalculate | DONE | keep; explicit "not counted" on failure (**DONE**) |
 | C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | DONE | water/protein/sleep rollup, stretch quick-add, chips, 7-day strip |
@@ -215,15 +216,16 @@ mandatory.
 2. Verify with `npx wrangler pages secret list --project-name fitness`.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
    `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
-   `0006_macro_targets.sql`, `0007_habits.sql`, and `0008_measurements.sql` remotely in a short window.
+   `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`, and
+   `0009_foods.sql` remotely in a short window.
 4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns),
-   `fitness_scan_usage`, `scan_data`, `fitness_scan_ledger`, `fitness_habits`, `fitness_measurements`, macro
-   columns on `fitness_logs`, partial `idx_fitness_logs_user_date_type`,
-   `idx_user_badges_user_code`.
+   `fitness_scan_usage`, `scan_data`, `fitness_scan_ledger`, `fitness_habits`,
+   `fitness_measurements`, `fitness_foods`, macro columns on `fitness_logs`, partial
+   `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
-   7-day rollup, measurement history, quota increments, 21st call 429, duplicate 409.
+   7-day rollup, measurement history, food search/portion logging, quota increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -234,6 +236,7 @@ mandatory.
 - [ ] Edit/remove today's entry; log and repair yesterday's entry.
 - [ ] Habit chips add water/protein/stretch; 7-day strip reflects them.
 - [ ] Measurement save/update/delete persists and keeps omitted fields.
+- [ ] Food search finds seeds/brands; portion scaling and manual entry add nutrition.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
 - [ ] Admin/other user cannot touch this user's goals.
@@ -243,8 +246,9 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002-0008; old code ignores the ledger, macro columns, habits, and measurements tables
-  and still benefits from the welcome-row index exception.
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0009; old code ignores the ledger,
+  macro columns, habits, measurements, and foods tables and still benefits from the
+  welcome-row index exception.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
 ---
@@ -262,6 +266,7 @@ mandatory.
 | Corrections | Edit/delete entry; yesterday log; date window enforced | verify |
 | Habits | Quick-add water/protein/stretch; 7-day rollup and targets | verify |
 | Measurements | Upsert keeps omitted fields; history/delete; date window | verify |
+| Foods | Seeded search, brands, portion math, manual add, merge into day | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
 | Backfill failure | Profile stays unconfirmed; retry works | verify |
@@ -421,8 +426,14 @@ The first release is done when:
   history, plus desktop/mobile navigation. Fitness **102/102 checks**, typecheck, lint,
   build pass. The weekly same-outfit photo comparison is still pending private object
   storage (R2) and is not included in the current deploy.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with the
-  C-16 food database next; C-12 photo compare waits on private storage approval. Land
+- **2026-10-20 - food database (C-16):** added `0009_foods.sql` with 62 seeded Indian
+  dishes and branded foods, per-100g macros, default portions, and labels. Added
+  owner-scoped food search (name/brand/category) and food logging with portion scaling;
+  manual nutrition entry merges into the day's nutrition row. Added a `/foods` page with
+  search, a scaled-nutrition panel, and manual entry, plus desktop/mobile navigation.
+  Fitness **111/111 checks**, typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-17
+  AI food search next; C-12 photo compare waits on private storage approval. Land
   observability/cost guardrails alongside.
 
 ## 12. Working agreement
