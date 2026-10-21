@@ -2499,6 +2499,14 @@ try {
       JSON.stringify({ nonAdmin: nonAdmin.status, anon: anon.status, badDays: badDays.status }),
     )
 
+    const cohort = analytics.body.cohort_retention
+    check(
+      'cohort retention returns array with size and retention rates',
+      Array.isArray(cohort) &&
+        cohort.every((c) => typeof c.cohort_week === 'string' && typeof c.size === 'number' && Array.isArray(c.retention)),
+      JSON.stringify(cohort),
+    )
+
     const lastEvent = await db
       .prepare('SELECT MAX(id) AS id FROM fitness_events')
       .first()

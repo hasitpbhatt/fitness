@@ -4,7 +4,7 @@
 import { Hono } from 'hono'
 import { isAdmin } from '../lib/admin'
 import { getSession } from '../lib/session'
-import { addDays, localDate } from '../lib/time'
+import { addDays, localDate, weekStart } from '../lib/time'
 import type { Bindings } from '../lib/types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -104,7 +104,7 @@ app.get('/api/admin/analytics', async (c) => {
   const sinceMs = now - days * 24 * 60 * 60 * 1000
   const today = localDate(null)
   const sinceDate = addDays(today, -(days - 1))
-  const weekStart = addDays(today, -6)
+  const weekStartDate = addDays(today, -6)
   const monthStart = addDays(today, -29)
 
   const totalMembers = await c.env.DB.prepare(
@@ -141,7 +141,7 @@ app.get('/api/admin/analytics', async (c) => {
      FROM fitness_logs
      WHERE activity IS NOT 'Welcome to fitness.hasit.in'`,
   )
-    .bind(today, weekStart, monthStart)
+    .bind(today, weekStartDate, monthStart)
     .first<MemberWindows>()
   const activityRows = await c.env.DB.prepare(
     `SELECT recorded_at AS date, COUNT(*) AS logs, COUNT(DISTINCT user_id) AS active
@@ -185,6 +185,69 @@ app.get('/api/admin/analytics', async (c) => {
      FROM fitness_entitlements GROUP BY tier, status ORDER BY count DESC`,
   ).all<GrantRow>()
 
+  // Cohort retention: weekly cohorts by first log week, track activity in subsequent weeks
+  const maxCohortWeeks = Math.min(12, Math.ceil(days / 7))
+  const cohortRetention: Array<{ cohort_week: string; size: number; retention: number[] }> = []
+  if (maxCohortWeeks > 1) {
+    // Get first log week per user (excluding welcome)
+    const firstLogs = await c.env.DB.prepare(
+      `SELECT user_id, MIN(recorded_at) AS first_date
+       FROM fitness_logs
+       WHERE activity IS NOT 'Welcome to fitness.hasit.in'
+         AND recorded_at >= ?
+       GROUP BY user_id`,
+    )
+      .bind(sinceDate)
+      .all<{ user_id: string; first_date: string }>()
+
+    // Group by cohort week (Monday start)
+    const cohorts = new Map<string, Set<string>>()
+    for (const row of firstLogs.results) {
+      const cohortWeek = weekStart(row.first_date)
+      if (!cohorts.has(cohortWeek)) cohorts.set(cohortWeek, new Set())
+      cohorts.get(cohortWeek)!.add(row.user_id)
+    }
+
+    // For each cohort, compute retention for each subsequent week
+    const allWeeks = Array.from({ length: maxCohortWeeks }, (_, i) =>
+      addDays(sinceDate, i * 7),
+    ).map(weekStart)
+
+    for (const cohortWeek of cohorts.keys()) {
+      const members = cohorts.get(cohortWeek)!
+      if (members.size === 0) continue
+      const cohortIndex = allWeeks.indexOf(cohortWeek)
+      if (cohortIndex === -1) continue
+
+      const retention: number[] = []
+      for (let offset = 0; offset < maxCohortWeeks - cohortIndex; offset++) {
+        const targetWeek = allWeeks[cohortIndex + offset]
+        const weekEndDate = addDays(targetWeek, 6)
+        // Count members from this cohort who logged in target week
+        const retained = await c.env.DB.prepare(
+          `SELECT COUNT(DISTINCT user_id) AS count
+           FROM fitness_logs
+           WHERE user_id IN (${Array.from(members).map(() => '?').join(',')})
+             AND recorded_at >= ? AND recorded_at <= ?
+             AND activity IS NOT 'Welcome to fitness.hasit.in'`,
+        )
+          .bind(...Array.from(members), targetWeek, weekEndDate)
+          .first<CountRow>()
+        const pct = members.size > 0
+          ? Math.round((retained?.count ?? 0) / members.size * 1000) / 10
+          : 0
+        retention.push(pct)
+      }
+      cohortRetention.push({
+        cohort_week: cohortWeek,
+        size: members.size,
+        retention,
+      })
+    }
+    // Sort by cohort week desc (newest first)
+    cohortRetention.sort((a, b) => b.cohort_week.localeCompare(a.cohort_week))
+  }
+
   return c.json({
     window: { days, start: sinceDate, end: today },
     members: {
@@ -220,6 +283,7 @@ app.get('/api/admin/analytics', async (c) => {
       coach: summarize(coachEvents, false),
     },
     access: { grants: grants.results },
+    cohort_retention: cohortRetention,
     server_time: now,
   })
 })

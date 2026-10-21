@@ -54,7 +54,7 @@ back to these.
   locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 178/178.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 179/179.
 - New UX exists locally: first-run goal + timezone onboarding, photo or text estimate,
   editable description + re-estimate, clarification questions, ranges, quota, manual
   fallback, timezone confirmation, macro
@@ -169,7 +169,7 @@ scan/search/coach gated; grant/revoke notifications sent; scheduler-based auto-e
 | C-34 | Health-platform sync (Apple Health/Google Fit) | none | native wrapper or Health Connect; PWA cannot; defer (**P3**) |
 | C-35 | Haptics/micro-interactions/micro-wins | partial | haptics, reduced-motion paths, success micro-wins (**P3**) |
 | C-36 | Terms, privacy, data export/delete, unsubscribe | none | legal pages + account export/delete (**P2**) |
-| C-37 | Analytics/observability | PARTIAL | `0015_analytics.sql`; `/admin/analytics` shows AI funnel, scan/coach success/error/latency, quota blocks, DAU/WAU/MAU, returning members, and access counts; no per-request cost or cohort-retention tables yet (**P1/P2**) |
+| C-37 | Analytics/observability | PARTIAL | `0015_analytics.sql`; `/admin/analytics` shows AI funnel, scan/coach success/error/latency, quota blocks, DAU/WAU/MAU, returning members, cohort retention (weekly), and access counts; no per-request cost yet (**P1/P2**) |
 | C-38 | Pricing/payment/finance/EMI/countdown/money-back | none | **EXCLUDED** — payment integration by instruction |
 | C-39 | Security anti-patterns: name+phone identity, admin UI in public bundle | Google OAuth; server-side authz/admin | deliberately not copied; keep the stronger model (**DONE**) |
 
@@ -533,7 +533,7 @@ The first release is done when:
   from AI scan/text/refine/search and coach with clear Plus copy; manual logging, food DB,
   meal plans, habits, and measurements remain free, and admins always keep access.
   Grant/revoke notifications now sent via in-app feed; scheduler-based auto-expiry still pending. Fitness
-  **178/178 checks**, typecheck, lint, build pass.
+  **179/179 checks**, typecheck, lint, build pass.
 - **2026-10-20 - baseline analytics (C-37 partial):** added `0015_analytics.sql` with
   privacy-safe `fitness_events` (no photos, descriptions, or chat text) and indexes by
   name/time and user/time. Scan estimate/log and coach replies record status, canonical
@@ -541,11 +541,11 @@ The first release is done when:
   member responses. Added admin-only `GET /api/admin/analytics?days=1-90` and
   `/admin/analytics` with AI estimate→logged funnel, scan/coach success and error
   breakdowns with p50/p95 latency, quota blocks, DAU/WAU/MAU, returning members, daily
-  activity, and provisioned-access counts. Reliability is capped to the latest 10,000
-  events and labels the view as sampled when capped. Per-request cost and cohort-retention
-  tables remain pending. Fitness **178/178 checks**, typecheck, lint, build pass.
+  activity, cohort retention (weekly), and provisioned-access counts. Reliability is capped
+  to the latest 10,000 events and labels the view as sampled when capped. Per-request cost
+  remains pending. Fitness **179/179 checks**, typecheck, lint, build pass.
 - **Next:** deploy remains pending explicit approval. Wave 1's planned baseline batch is
-  implemented; remaining partials are C-37 cost/cohort retention and C-02
+  implemented; remaining partials are C-37 per-request cost and C-02
   scheduler-based auto-expiry. C-12 photo compare waits on private storage approval.
 
 ## 12. Working agreement
