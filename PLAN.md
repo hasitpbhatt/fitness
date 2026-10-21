@@ -53,7 +53,7 @@ back to these.
   locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 139/139.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 144/144.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
@@ -61,7 +61,8 @@ back to these.
   food database with portion scaling, manual entry, AI food search options, and in-app
   notifications with admin compose/schedule, a shared AI usage meter, a grounded AI coach
   with starter prompts, a clear-chat action, and a separate 20-message daily budget, and a
-  seven-day vegetarian/non-vegetarian meal plan scaled to targets with a print/PDF view.
+  seven-day vegetarian/non-vegetarian meal plan scaled to targets with a print/PDF view,
+  and an admin-only read-only member directory with search and activity counts.
 
 ### Freellm (production)
 
@@ -156,7 +157,7 @@ admin UI shipped in the member bundle.
 | C-29 | Per-route SEO, sitemap, structured data, prerender | SPA shell | route meta, sitemap, JSON-LD, prerender public pages (**P2**) |
 | C-30 | Calorie/TDEE calculator lead magnet | none | public calculator + optional email capture (**P3**) |
 | C-31 | Acquisition funnel, lead CRM, sales scripts, game-plan parser | none | defer unless we run paid coaching; no payment integration (**P3**) |
-| C-32 | Admin/coach ops: members, grants, content, meal tracking, report cards, food review, calls | none | build the subset needed by C-02/05/06/07/20/23/24; rest with coaching mode (**P1/P2**) |
+| C-32 | Admin/coach ops: members, grants, content, meal tracking, report cards, food review, calls | PARTIAL | `/admin/members` read-only directory with search, timezone state, goals, and 7-day logging; grants/content/meal tracking/report cards/food review/calls pending (**P1/P2**) |
 | C-33 | i18n | none | extract strings now; add Hindi after EN parity (**P3**) |
 | C-34 | Health-platform sync (Apple Health/Google Fit) | none | native wrapper or Health Connect; PWA cannot; defer (**P3**) |
 | C-35 | Haptics/micro-interactions/micro-wins | partial | haptics, reduced-motion paths, success micro-wins (**P3**) |
@@ -234,8 +235,8 @@ mandatory.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
    7-day rollup, measurement history, food search/portion logging, coach reply and
-   clear, meal plan for both diets with print preview, notification feed/admin, quota
-   increments, 21st call 429, duplicate 409.
+   clear, meal plan for both diets with print preview, admin member search, notification
+   feed/admin, quota increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -250,6 +251,7 @@ mandatory.
 - [ ] AI food search returns options, scales the chosen portion, and spends one estimate.
 - [ ] Coach uses recent data, answers a starter prompt, clears, and spends one of 20.
 - [ ] Meal plan switches veg/nonveg, reflects targets, prints/saves a clean PDF.
+- [ ] Admin searches the member directory and sees timezone, goals, and activity.
 - [ ] Admin sends a banner/popup; member view and dismiss counts update.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
@@ -284,6 +286,7 @@ mandatory.
 | AI food search | Option normalization, quota spend/refund, model prompt | verify |
 | AI coach | Grounded prompt, role validation, quota spend/refund/ceiling | verify |
 | Meal plan | 7 days, diet filtering, target scaling, top-up, totals, invalid diet | verify |
+| Admin members | Admin-only directory, search, limit validation, non-admin 403 | verify |
 | Notifications | Audience/schedule, view/dismiss, admin test/cancel | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
@@ -484,8 +487,15 @@ The first release is done when:
   instead of claiming precision. Added `/meal-plan` with diet switching, per-day and
   average totals, default-target guidance, print styles that hide app chrome, and
   browser print/save-as-PDF. Fitness **139/139 checks**, typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-32
-  minimal admin and C-01 onboarding; C-12 photo compare waits on private storage approval.
+- **2026-10-20 - admin member directory (C-32 partial):** added admin-only
+  `GET /api/admin/members` with normalized search across email/username/display name,
+  bounded limits, timezone state, goal count, last log date, and 7-day log activity.
+  Added `/admin/members` with search, refresh, activity badges, and admin/mobile
+  navigation. This is the read-only support slice; grants, content authoring, meal
+  tracking, report cards, food review, and calls stay with their feature milestones.
+  Fitness **144/144 checks**, typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-01
+  onboarding and C-02 entitlements; C-12 photo compare waits on private storage approval.
   Land observability/cost guardrails alongside.
 
 ## 12. Working agreement

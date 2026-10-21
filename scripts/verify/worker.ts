@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import adminMembersRoutes from '../../functions/routes/adminMembers'
 import authRoutes from '../../functions/routes/auth'
 import coachRoutes from '../../functions/routes/coach'
 import fitnessRoutes from '../../functions/routes/fitness'
@@ -24,6 +25,7 @@ app.get('/api/health', async (c) => {
   return c.json({ ok: db === 'ok', env: c.env.ENVIRONMENT, db })
 })
 
+app.route('/', adminMembersRoutes)
 app.route('/', authRoutes)
 app.route('/', coachRoutes)
 app.route('/', fitnessRoutes)

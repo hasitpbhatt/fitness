@@ -1909,6 +1909,42 @@ try {
     )
   }
 
+  console.log('\n-- admin members --')
+  {
+    const directory = await json(await call('/api/admin/members', { headers: authHeaders }))
+    const verifier = (directory.body.members ?? []).find((member) => member.id === 'u-verify')
+    check(
+      'admin member directory includes the signed-in admin',
+      directory.status === 200 &&
+        verifier?.role === 'admin' &&
+        verifier?.email === 'verify@example.com' &&
+        verifier?.goal_count >= 1 &&
+        typeof verifier?.logs_7d === 'number' &&
+        typeof verifier?.timezone === 'string',
+      JSON.stringify(verifier ?? directory.body),
+    )
+
+    const filtered = await json(
+      await call('/api/admin/members?q=verifier&limit=10', { headers: authHeaders }),
+    )
+    check(
+      'admin member search matches username or email',
+      filtered.status === 200 &&
+        filtered.body.members?.length === 1 &&
+        filtered.body.members[0]?.id === 'u-verify',
+      JSON.stringify(filtered.body),
+    )
+
+    const badLimit = await json(await call('/api/admin/members?limit=0', { headers: authHeaders }))
+    check('admin member limit is validated -> 400', badLimit.status === 400, JSON.stringify(badLimit.body))
+
+    const nonAdminHeaders = { cookie: 'fitness_session=other-token', 'content-type': 'application/json' }
+    const forbidden = await json(await call('/api/admin/members', { headers: nonAdminHeaders }))
+    check('non-admin cannot read the member directory -> 403', forbidden.status === 403)
+    const anon = await json(await call('/api/admin/members'))
+    check('member directory without cookie -> 401', anon.status === 401)
+  }
+
   console.log('\n-- notifications --')
   {
     const created = await json(

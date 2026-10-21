@@ -35,7 +35,11 @@ function AppShellContent() {
   const location = useLocation()
   const displayNavItems =
     user?.role === 'admin'
-      ? [...navItems, { to: '/admin/notifications', label: 'Notifications' }]
+      ? [
+          ...navItems,
+          { to: '/admin/members', label: 'Members' },
+          { to: '/admin/notifications', label: 'Notifications' },
+        ]
       : navItems
 
   useEffect(() => {
