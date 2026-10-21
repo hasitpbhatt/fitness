@@ -777,6 +777,66 @@ try {
       }),
     )
     check('granting a missing member -> 404', missing.status === 404)
+
+    const grantNotif = await db
+      .prepare("SELECT * FROM fitness_notifications WHERE user_id = 'u-other' AND title = 'Plus access enabled'")
+      .first()
+    check(
+      'granting Plus creates a notification for the member',
+      grantNotif !== null && grantNotif.body.includes('AI meal scans') && grantNotif.url === '/coach',
+      JSON.stringify(grantNotif),
+    )
+
+    await call('/api/admin/entitlements/u-other', {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify({ tier: 'plus', status: 'trial', trial_days: 7, note: 'Trial start' }),
+    })
+    const trialStartNotif = await db
+      .prepare("SELECT * FROM fitness_notifications WHERE user_id = 'u-other' AND title = 'Plus trial started'")
+      .first()
+    check(
+      'starting a trial creates a notification with end date',
+      trialStartNotif !== null && trialStartNotif.body.includes('runs until') && trialStartNotif.url === '/coach',
+      JSON.stringify(trialStartNotif),
+    )
+
+    await call('/api/admin/entitlements/u-other', {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify({ tier: 'plus', status: 'trial', trial_days: 14, note: 'Trial extend' }),
+    })
+    const trialExtendNotif = await db
+      .prepare("SELECT * FROM fitness_notifications WHERE user_id = 'u-other' AND title = 'Trial extended'")
+      .first()
+    check(
+      'extending trial creates a notification with new end date',
+      trialExtendNotif !== null && trialExtendNotif.body.includes('valid until') && trialExtendNotif.url === '/coach',
+      JSON.stringify(trialExtendNotif),
+    )
+
+    await call('/api/admin/entitlements/u-other', {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify({ tier: 'plus', status: 'revoked', note: 'Paused' }),
+    })
+    const revokeNotif = await db
+      .prepare("SELECT * FROM fitness_notifications WHERE user_id = 'u-other' AND title = 'Access updated'")
+      .first()
+    check(
+      'revoking access creates a notification',
+      revokeNotif !== null && revokeNotif.body.includes('turned off') && revokeNotif.url === '/dashboard',
+      JSON.stringify(revokeNotif),
+    )
+
+    const adminNotif = await db
+      .prepare("SELECT * FROM fitness_notifications WHERE user_id = 'u-verify'")
+      .all()
+    check(
+      'admin target does not receive notifications',
+      adminNotif.results.length === 0,
+      JSON.stringify(adminNotif.results),
+    )
   }
 
   console.log('\n-- leaderboard --')

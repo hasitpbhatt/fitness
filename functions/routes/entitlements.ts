@@ -9,8 +9,10 @@ import {
   getEntitlement,
   type EntitlementRow,
   type FitnessTier,
+  type FitnessEntitlement,
 } from '../lib/entitlements'
 import { getSession } from '../lib/session'
+import { newId } from '../lib/crypto'
 import type { Bindings } from '../lib/types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -19,6 +21,72 @@ const DEFAULT_LIMIT = 50
 const MAX_LIMIT = 200
 const VALID_TIERS: FitnessTier[] = ['free', 'plus', 'coach']
 const VALID_STATUSES = ['active', 'trial', 'revoked'] as const
+
+function formatTrialEnds(ms: number): string {
+  return new Date(ms).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+async function notifyAccessChange(
+  env: Bindings,
+  adminId: string,
+  targetId: string,
+  previous: FitnessEntitlement,
+  next: FitnessEntitlement,
+  targetRole: string | null,
+): Promise<void> {
+  if (targetRole === 'admin') return
+
+  let title = ''
+  let body = ''
+  let url = '/dashboard'
+
+  if (next.tier === 'free' && previous.tier !== 'free') {
+    title = 'Access updated'
+    body = 'Your Plus access was turned off. Manual logging remains free.'
+    url = '/dashboard'
+  } else if (next.tier !== 'free') {
+    if (next.status === 'trial') {
+      const prevStatus = previous.status as 'active' | 'trial' | 'revoked' | 'expired'
+      if (prevStatus === 'trial' && previous.trial_ends_at !== next.trial_ends_at) {
+        title = 'Trial extended'
+        body = `Your Plus trial is now valid until ${formatTrialEnds(next.trial_ends_at!)}.`
+        url = '/coach'
+      } else {
+        title = 'Plus trial started'
+        body = `Your Plus trial runs until ${formatTrialEnds(next.trial_ends_at!)}. AI meal scans, food search, and the coach are now available.`
+        url = '/coach'
+      }
+    } else {
+      const prevStatus = previous.status as 'active' | 'trial' | 'revoked' | 'expired'
+      if (previous.tier === 'free' || prevStatus === 'revoked') {
+        title = next.tier === 'coach' ? 'Coach access enabled' : 'Plus access enabled'
+        body = 'AI meal scans, food search, and the coach are now available.'
+        url = '/coach'
+      } else if (prevStatus === 'trial' && next.status === 'active') {
+        title = 'Plus access confirmed'
+        body = 'Your trial converted to active Plus access.'
+        url = '/coach'
+      } else {
+        return
+      }
+    }
+  } else {
+    return
+  }
+
+  try {
+    const now = Date.now()
+    await env.DB.prepare(
+      `INSERT INTO fitness_notifications
+         (id, user_id, title, body, url, audience, status, sticky, send_at, sent_at, created_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'test', 'sent', 0, ?, ?, ?, ?, ?)`,
+    )
+      .bind(newId(), targetId, title, body, url, now, now, adminId, now, now)
+      .run()
+  } catch (err) {
+    console.error('[entitlements] notification insert failed', err)
+  }
+}
 
 type AccessRow = EntitlementRow & {
   id: string
@@ -98,10 +166,18 @@ app.put('/api/admin/entitlements/:userId', async (c) => {
   if (!(await isAdmin(c.env, adminId))) return c.json({ error: 'forbidden' }, 403)
 
   const targetId = c.req.param('userId')
-  const target = await c.env.DB.prepare('SELECT id FROM freellm_users WHERE id = ?')
+  const target = await c.env.DB.prepare('SELECT id, role FROM freellm_users WHERE id = ?')
     .bind(targetId)
-    .first<{ id: string }>()
+    .first<{ id: string; role: string | null }>()
   if (!target) return c.json({ error: 'not_found', message: 'That member does not exist.' }, 404)
+
+  const previousRow = await c.env.DB.prepare(
+    `SELECT e.user_id AS entitlement_user_id, e.tier, e.status, e.trial_ends_at, e.ends_at, e.note
+     FROM fitness_entitlements e WHERE e.user_id = ?`,
+  )
+    .bind(targetId)
+    .first<EntitlementRow>()
+  const previous = previousRow ? effectiveEntitlement(previousRow, Date.now()) : effectiveEntitlement(null, Date.now())
 
   const body = await c.req.json<Record<string, unknown>>().catch(() => null)
   if (!body) return c.json({ error: 'invalid_body', message: 'Send a JSON body.' }, 400)
@@ -162,6 +238,9 @@ app.put('/api/admin/entitlements/:userId', async (c) => {
     .bind(targetId, selectedTier, effectiveStatus, trialEndsAt, endsAt, adminId, note, now, now)
     .run()
 
+  const next = await getEntitlement(c.env, targetId)
+  await notifyAccessChange(c.env, adminId, targetId, previous, next, target.role)
+
   return c.json({
     user_id: targetId,
     tier: selectedTier,
@@ -169,7 +248,7 @@ app.put('/api/admin/entitlements/:userId', async (c) => {
     trial_ends_at: trialEndsAt,
     ends_at: endsAt,
     note,
-    entitlement: await getEntitlement(c.env, targetId),
+    entitlement: next,
   })
 })
 
