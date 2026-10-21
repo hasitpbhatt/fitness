@@ -15,6 +15,7 @@
 
 import { Hono } from 'hono'
 import { newId } from '../lib/crypto'
+import { canUseAITools } from '../lib/entitlements'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
 import { getSession } from '../lib/session'
 import { updateStreaks } from '../lib/streaks'
@@ -28,6 +29,7 @@ const MAX_ITEMS = 20
 const MAX_QUESTIONS = 5
 const SCANS_PER_DAY = 20
 const QUOTA_EXHAUSTED_MESSAGE = `You've used all ${SCANS_PER_DAY} AI estimates for today - try again tomorrow.`
+const AI_TIER_MESSAGE = 'AI food tools are part of Plus. Ask your coach to enable access.'
 const MAX_SCANS_STORED = 30
 const UPSTREAM_TIMEOUT_MS = 60_000
 const DEFAULT_BASE_URL = 'https://freellm.hasit.in/v1'
@@ -411,6 +413,9 @@ app.get('/api/fitness/scan/quota', async (c) => {
 app.post('/api/fitness/scan', async (c) => {
   const session = await getSession(c.env.fitness_sessions, c.req.header('cookie') ?? null)
   if (!session) return c.json({ error: 'unauthorized' }, 401)
+  if (!(await canUseAITools(c.env, session.userId))) {
+    return c.json({ error: 'tier_required', message: AI_TIER_MESSAGE }, 403)
+  }
 
   const body = await c.req.json<{ image?: unknown; timezone?: unknown }>().catch(() => null)
   const image = typeof body?.image === 'string' ? body.image : ''
@@ -475,6 +480,9 @@ app.post('/api/fitness/scan', async (c) => {
 app.post('/api/fitness/scan/text', async (c) => {
   const session = await getSession(c.env.fitness_sessions, c.req.header('cookie') ?? null)
   if (!session) return c.json({ error: 'unauthorized' }, 401)
+  if (!(await canUseAITools(c.env, session.userId))) {
+    return c.json({ error: 'tier_required', message: AI_TIER_MESSAGE }, 403)
+  }
 
   const body = await c.req.json<{ description?: unknown; timezone?: unknown }>().catch(() => null)
   const description = typeof body?.description === 'string' ? body.description.trim() : ''
@@ -533,6 +541,9 @@ app.post('/api/fitness/scan/text', async (c) => {
 app.post('/api/fitness/scan/suggest', async (c) => {
   const session = await getSession(c.env.fitness_sessions, c.req.header('cookie') ?? null)
   if (!session) return c.json({ error: 'unauthorized' }, 401)
+  if (!(await canUseAITools(c.env, session.userId))) {
+    return c.json({ error: 'tier_required', message: AI_TIER_MESSAGE }, 403)
+  }
 
   const body = await c.req.json<{ query?: unknown }>().catch(() => null)
   const query = typeof body?.query === 'string' ? body.query.trim() : ''
@@ -587,6 +598,9 @@ app.post('/api/fitness/scan/suggest', async (c) => {
 app.post('/api/fitness/scan/refine', async (c) => {
   const session = await getSession(c.env.fitness_sessions, c.req.header('cookie') ?? null)
   if (!session) return c.json({ error: 'unauthorized' }, 401)
+  if (!(await canUseAITools(c.env, session.userId))) {
+    return c.json({ error: 'tier_required', message: AI_TIER_MESSAGE }, 403)
+  }
 
   const body = await c.req
     .json<{ scan?: unknown; instruction?: unknown; description?: unknown; timezone?: unknown }>()

@@ -8,6 +8,7 @@ import Foods from './pages/Foods'
 import MealPlan from './pages/MealPlan'
 import Log from './pages/Log'
 import Achievements from './pages/Achievements'
+import AdminAccess from './pages/AdminAccess'
 import AdminMembers from './pages/AdminMembers'
 import AdminNotifications from './pages/AdminNotifications'
 import Leaderboard from './pages/Leaderboard'
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/measurements" element={<Measurements />} />
           <Route path="/admin/members" element={<AdminMembers />} />
+          <Route path="/admin/access" element={<AdminAccess />} />
           <Route path="/admin/notifications" element={<AdminNotifications />} />
         </Route>
         <Route path="*" element={<NotFound />} />

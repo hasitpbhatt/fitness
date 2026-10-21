@@ -5,6 +5,7 @@ import { Button, Card, Textarea } from '../components/ui'
 import { AI_COACH_LIMIT, COACH_EXHAUSTED_MESSAGE, COACH_QUOTA_NOTE, COACH_UNAVAILABLE_MESSAGE, aiExhausted } from '../lib/aiUsage'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useEntitlement } from '../lib/useEntitlement'
 import type { CoachMessage, ScanQuota } from '../lib/types'
 
 const STARTERS = [
@@ -16,6 +17,7 @@ const STARTERS = [
 
 export default function Coach() {
   const { user, loading } = useAuth()
+  const entitlement = useEntitlement(user?.id)
   const [messages, setMessages] = useState<CoachMessage[]>([])
   const [input, setInput] = useState('')
   const [quota, setQuota] = useState<ScanQuota | null>(null)
@@ -62,6 +64,24 @@ export default function Coach() {
         <p className="mt-2 text-[13px] text-muted">Sign in to ask questions grounded in your recent progress.</p>
         <Link to="/login" className="btn-primary mt-4 inline-flex">Sign in with Google</Link>
       </Card>
+    )
+  }
+
+  if (entitlement !== null && !entitlement.features.ai_tools) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <Card className="p-8 text-center">
+          <p className="text-[11px] uppercase tracking-wide text-muted">Plus feature</p>
+          <h1 className="mt-1 text-xl font-semibold">The AI coach is part of Plus</h1>
+          <p className="mx-auto mt-2 max-w-md text-[13px] text-muted">
+            Ask your coach to enable access. Manual logging, goals, meal plans, habits, and the
+            food database stay free.
+          </p>
+          <Link to="/" className="btn-primary mt-5 inline-flex">
+            Back to dashboard
+          </Link>
+        </Card>
+      </div>
     )
   }
 

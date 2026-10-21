@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import adminMembersRoutes from '../../functions/routes/adminMembers'
 import authRoutes from '../../functions/routes/auth'
 import coachRoutes from '../../functions/routes/coach'
+import entitlementRoutes from '../../functions/routes/entitlements'
 import fitnessRoutes from '../../functions/routes/fitness'
 import foodRoutes from '../../functions/routes/foods'
 import habitRoutes from '../../functions/routes/habits'
@@ -28,6 +29,7 @@ app.get('/api/health', async (c) => {
 app.route('/', adminMembersRoutes)
 app.route('/', authRoutes)
 app.route('/', coachRoutes)
+app.route('/', entitlementRoutes)
 app.route('/', fitnessRoutes)
 app.route('/', foodRoutes)
 app.route('/', habitRoutes)

@@ -41,6 +41,7 @@ function AppShellContent() {
       ? [
           ...navItems,
           { to: '/admin/members', label: 'Members' },
+          { to: '/admin/access', label: 'Access' },
           { to: '/admin/notifications', label: 'Notifications' },
         ]
       : navItems

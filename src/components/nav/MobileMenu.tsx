@@ -45,6 +45,7 @@ export function MobileMenu({
           {isAdmin && (
             <>
               <Link to="/admin/members" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Members</Link>
+              <Link to="/admin/access" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Access</Link>
               <Link to="/admin/notifications" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Notifications</Link>
             </>
           )}

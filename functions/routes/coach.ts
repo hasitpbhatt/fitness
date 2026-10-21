@@ -4,6 +4,7 @@
 // member's daily coach replies, and failed upstream calls refund it.
 
 import { Hono } from 'hono'
+import { canUseAITools } from '../lib/entitlements'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
 import { getSession } from '../lib/session'
 import { addDays, localDate, quotaDay } from '../lib/time'
@@ -12,6 +13,7 @@ import type { Bindings } from '../lib/types'
 const app = new Hono<{ Bindings: Bindings }>()
 
 const COACH_MESSAGES_PER_DAY = 20
+const COACH_TIER_MESSAGE = 'The AI coach is part of Plus. Ask your coach to enable access.'
 const MAX_HISTORY = 12
 const MAX_USER_CHARS = 2_000
 const MAX_ASSISTANT_CHARS = 4_000
@@ -303,6 +305,9 @@ app.get('/api/fitness/coach/quota', async (c) => {
 app.post('/api/fitness/coach', async (c) => {
   const session = await getSession(c.env.fitness_sessions, c.req.header('cookie') ?? null)
   if (!session) return c.json({ error: 'unauthorized' }, 401)
+  if (!(await canUseAITools(c.env, session.userId))) {
+    return c.json({ error: 'tier_required', message: COACH_TIER_MESSAGE }, 403)
+  }
 
   const body = await c.req.json<{ messages?: unknown }>().catch(() => null)
   const history = parseHistory(body?.messages)

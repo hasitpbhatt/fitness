@@ -80,6 +80,21 @@ export type LeaderboardEntry = {
   calories: number | null
 }
 
+export type FitnessTier = 'free' | 'plus' | 'coach'
+export type EntitlementStatus = 'active' | 'trial' | 'revoked' | 'expired'
+
+export type FitnessEntitlement = {
+  tier: FitnessTier
+  tier_label: string
+  status: EntitlementStatus
+  is_active: boolean
+  trial_ends_at: number | null
+  ends_at: number | null
+  note: string | null
+  source: 'admin' | 'grant' | 'default'
+  features: { ai_tools: boolean }
+}
+
 export type FitnessProfile = {
   timezone: string | null
   confirmed: boolean

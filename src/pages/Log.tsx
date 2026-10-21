@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
+import { useAuth } from '../lib/auth'
 import { addDays, detectTimezone, localDate } from '../lib/timezone'
+import { useEntitlement } from '../lib/useEntitlement'
 import { Button, Card } from '../components/ui'
 import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { EditLogModal } from '../components/EditLogModal'
@@ -10,6 +12,8 @@ import type { FitnessLog } from '../lib/types'
 type ActivityType = 'workout' | 'nutrition' | 'sleep' | 'water' | 'custom'
 
 export default function Log() {
+  const { user } = useAuth()
+  const entitlement = useEntitlement(user?.id)
   const [type, setType] = useState<ActivityType>('workout')
   const [activity, setActivity] = useState('')
   const [durationMin, setDurationMin] = useState<string>('')
@@ -132,7 +136,20 @@ export default function Log() {
             <h1 className="text-lg font-semibold">Log {day === 'yesterday' ? 'Yesterday' : 'Today'}</h1>
             <p className="text-[13px] text-muted mt-1">One entry per activity type per day.</p>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => setScanOpen(true)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              if (entitlement && !entitlement.features.ai_tools) {
+                setMessage({
+                  kind: 'error',
+                  text: 'AI food scan is part of Plus. Ask your coach to enable access, or add the meal manually below.',
+                })
+                return
+              }
+              setScanOpen(true)
+            }}
+          >
             Scan food
           </Button>
         </div>

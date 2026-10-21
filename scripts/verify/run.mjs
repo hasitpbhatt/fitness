@@ -578,6 +578,207 @@ try {
     )
   }
 
+  console.log('\n-- entitlements --')
+  {
+    const otherHeaders = { cookie: 'fitness_session=other-token', 'content-type': 'application/json' }
+    await db.prepare("DELETE FROM fitness_entitlements WHERE user_id = 'u-other'").run()
+    const free = await json(await call('/api/fitness/entitlement', { headers: otherHeaders }))
+    check(
+      'new member defaults to free without AI tools',
+      free.status === 200 &&
+        free.body.entitlement?.tier === 'free' &&
+        free.body.entitlement?.status === 'active' &&
+        free.body.entitlement?.is_active === false &&
+        free.body.entitlement?.features?.ai_tools === false &&
+        free.body.entitlement?.source === 'default',
+      JSON.stringify(free.body),
+    )
+
+    const freeScan = await json(
+      await call('/api/fitness/scan', {
+        method: 'POST',
+        headers: otherHeaders,
+        body: JSON.stringify({ image: 'data:image/jpeg;base64,AAAA' }),
+      }),
+    )
+    const freeCoach = await json(
+      await call('/api/fitness/coach', {
+        method: 'POST',
+        headers: otherHeaders,
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
+      }),
+    )
+    check(
+      'free member is blocked from AI scan and coach -> 403',
+      freeScan.status === 403 &&
+        freeScan.body.error === 'tier_required' &&
+        freeCoach.status === 403 &&
+        freeCoach.body.error === 'tier_required',
+      JSON.stringify({ scan: freeScan.body, coach: freeCoach.body }),
+    )
+
+    const anon = await json(await call('/api/fitness/entitlement'))
+    check('entitlement without cookie -> 401', anon.status === 401)
+
+    const adminAccess = await json(
+      await call('/api/fitness/entitlement', { headers: authHeaders }),
+    )
+    check(
+      'admin entitlement is coach access',
+      adminAccess.status === 200 &&
+        adminAccess.body.entitlement?.tier === 'coach' &&
+        adminAccess.body.entitlement?.source === 'admin' &&
+        adminAccess.body.entitlement?.features?.ai_tools === true,
+      JSON.stringify(adminAccess.body),
+    )
+
+    const forbidden = await json(
+      await call('/api/admin/entitlements', { headers: otherHeaders }),
+    )
+    check('non-admin cannot read the access list -> 403', forbidden.status === 403)
+
+    const badLimit = await json(
+      await call('/api/admin/entitlements?limit=0', { headers: authHeaders }),
+    )
+    check('access list limit is validated -> 400', badLimit.status === 400)
+
+    const list = await json(
+      await call('/api/admin/entitlements?q=other&limit=10', { headers: authHeaders }),
+    )
+    check(
+      'admin access search finds a free member',
+      list.status === 200 &&
+        list.body.members?.length === 1 &&
+        list.body.members[0]?.user_id === 'u-other' &&
+        list.body.members[0]?.tier === 'free' &&
+        list.body.members[0]?.features?.ai_tools === false,
+      JSON.stringify(list.body),
+    )
+
+    const granted = await json(
+      await call('/api/admin/entitlements/u-other', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ tier: 'plus', note: 'Verify grant' }),
+      }),
+    )
+    check(
+      'admin grants Plus access',
+      granted.status === 200 &&
+        granted.body.entitlement?.tier === 'plus' &&
+        granted.body.entitlement?.status === 'active' &&
+        granted.body.entitlement?.features?.ai_tools === true &&
+        granted.body.entitlement?.note === 'Verify grant',
+      JSON.stringify(granted.body),
+    )
+
+    const unlockedScan = await json(
+      await call('/api/fitness/scan', {
+        method: 'POST',
+        headers: otherHeaders,
+        body: JSON.stringify({ image: 'data:image/jpeg;base64,AAAA' }),
+      }),
+    )
+    check(
+      'Plus member reaches the unconfigured scan gateway -> 503',
+      unlockedScan.status === 503 && unlockedScan.body.error === 'upstream_error',
+      JSON.stringify(unlockedScan.body),
+    )
+
+    const trial = await json(
+      await call('/api/admin/entitlements/u-other', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ tier: 'coach', status: 'trial', trial_days: 1, note: 'Trial' }),
+      }),
+    )
+    check(
+      'admin starts a timed trial',
+      trial.status === 200 &&
+        trial.body.entitlement?.tier === 'coach' &&
+        trial.body.entitlement?.status === 'trial' &&
+        typeof trial.body.entitlement?.ends_at === 'number' &&
+        trial.body.entitlement.ends_at > Date.now(),
+      JSON.stringify(trial.body),
+    )
+
+    const past = Date.now() - 1_000
+    await db
+      .prepare(
+        "UPDATE fitness_entitlements SET ends_at = ?, trial_ends_at = ? WHERE user_id = 'u-other'",
+      )
+      .bind(past, past)
+      .run()
+    const expired = await json(await call('/api/fitness/entitlement', { headers: otherHeaders }))
+    const expiredRow = await db
+      .prepare("SELECT status FROM fitness_entitlements WHERE user_id = 'u-other'")
+      .first()
+    check(
+      'expired trial falls back to free and persists expiry',
+      expired.status === 200 &&
+        expired.body.entitlement?.tier === 'free' &&
+        expired.body.entitlement?.status === 'expired' &&
+        expired.body.entitlement?.is_active === false &&
+        expiredRow?.status === 'expired',
+      JSON.stringify({ entitlement: expired.body, row: expiredRow }),
+    )
+
+    await call('/api/admin/entitlements/u-other', {
+      method: 'PUT',
+      headers: authHeaders,
+      body: JSON.stringify({ tier: 'plus', note: 'Verify revoke' }),
+    })
+    const revoked = await json(
+      await call('/api/admin/entitlements/u-other', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ tier: 'plus', status: 'revoked', note: 'Paused' }),
+      }),
+    )
+    const revokedRow = await db
+      .prepare("SELECT tier, status FROM fitness_entitlements WHERE user_id = 'u-other'")
+      .first()
+    check(
+      'revoked access keeps the tier for audit but falls back to free',
+      revoked.status === 200 &&
+        revoked.body.entitlement?.tier === 'free' &&
+        revoked.body.entitlement?.status === 'revoked' &&
+        revoked.body.entitlement?.is_active === false &&
+        revokedRow?.tier === 'plus' &&
+        revokedRow?.status === 'revoked',
+      JSON.stringify({ entitlement: revoked.body, row: revokedRow }),
+    )
+
+    const badTier = await json(
+      await call('/api/admin/entitlements/u-other', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ tier: 'gold' }),
+      }),
+    )
+    const badTrial = await json(
+      await call('/api/admin/entitlements/u-other', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ tier: 'plus', status: 'trial', trial_days: 0 }),
+      }),
+    )
+    check(
+      'access payloads are validated -> 400',
+      badTier.status === 400 && badTrial.status === 400,
+      JSON.stringify({ tier: badTier.body, trial: badTrial.body }),
+    )
+
+    const missing = await json(
+      await call('/api/admin/entitlements/u-missing', {
+        method: 'PUT',
+        headers: authHeaders,
+        body: JSON.stringify({ tier: 'plus' }),
+      }),
+    )
+    check('granting a missing member -> 404', missing.status === 404)
+  }
+
   console.log('\n-- leaderboard --')
   {
     const { status, body } = await json(await call('/api/fitness/leaderboard'))
@@ -1248,6 +1449,13 @@ try {
         )
         .bind(now, now)
         .run()
+      await scanDb
+        .prepare(
+          `INSERT INTO fitness_entitlements (user_id, tier, status, note, created_at, updated_at)
+           VALUES ('u-scan', 'plus', 'active', 'Verify access', ?, ?)`,
+        )
+        .bind(now, now)
+        .run()
       await scanKv.put('session:scan-token', JSON.stringify({ userId: 'u-scan' }))
       const scanHeaders = { cookie: 'fitness_session=scan-token', 'content-type': 'application/json' }
       const callScan = (path, opts = {}) => scanMf.dispatchFetch(`http://localhost${path}`, opts)
@@ -1487,6 +1695,13 @@ try {
         .prepare(
           `INSERT INTO freellm_users (id, email, username, display_name, referral_code, balance_credits, role, email_verified, created_at, updated_at)
            VALUES ('u-coach', 'coach@example.com', 'coachtest', 'Coach Test', 'COACH001', 0, 'user', 1, ?, ?)`,
+        )
+        .bind(now, now)
+        .run()
+      await scanDb
+        .prepare(
+          `INSERT INTO fitness_entitlements (user_id, tier, status, note, created_at, updated_at)
+           VALUES ('u-coach', 'plus', 'active', 'Verify access', ?, ?)`,
         )
         .bind(now, now)
         .run()

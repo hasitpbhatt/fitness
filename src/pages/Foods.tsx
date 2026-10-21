@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
 import { AI_EXHAUSTED_MESSAGE, aiExhausted } from '../lib/aiUsage'
 import { useAuth } from '../lib/auth'
+import { useEntitlement } from '../lib/useEntitlement'
 import { AIUsageMeter } from '../components/ai/AIUsageMeter'
 import { Button, Card, Input } from '../components/ui'
 import type { Food, FoodOption, ScanQuota } from '../lib/types'
@@ -52,6 +53,7 @@ function optionToFood(option: FoodOption, index: number): Food {
 
 export default function Foods() {
   const { user, loading } = useAuth()
+  const entitlement = useEntitlement(user?.id)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Food[] | null>(null)
   const [selected, setSelected] = useState<Food | null>(null)
@@ -117,6 +119,8 @@ export default function Foods() {
     )
   }
 
+  const aiTools = entitlement?.features.ai_tools ?? true
+
   const search = async (event: React.FormEvent) => {
     event.preventDefault()
     setSearching(true)
@@ -134,6 +138,10 @@ export default function Foods() {
   }
 
   const aiSearch = async () => {
+    if (!aiTools) {
+      setError('AI search is part of Plus. Ask your coach to enable access.')
+      return
+    }
     const searchQuery = query.trim()
     if (searchQuery.length < 2) {
       setError('Type at least 2 characters to search with AI.')
@@ -259,7 +267,14 @@ export default function Foods() {
         </div>
       )}
 
-      <AIUsageMeter quota={quota} configured={configured} />
+      {aiTools ? (
+        <AIUsageMeter quota={quota} configured={configured} />
+      ) : (
+        <p className="rounded-lg border border-line bg-surface px-3 py-2 text-[12px] text-muted">
+          AI search is part of Plus. Ask your coach to enable access; manual search and logging
+          stay free.
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
@@ -276,7 +291,7 @@ export default function Foods() {
               type="button"
               variant="secondary"
               loading={aiSearching}
-              disabled={aiExhausted(quota) || configured === false}
+              disabled={!aiTools || aiExhausted(quota) || configured === false}
               onClick={() => void aiSearch()}
             >
               AI search

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { detectTimezone } from '../lib/timezone'
+import { useEntitlement } from '../lib/useEntitlement'
 import { Button, Card } from '../components/ui'
 import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { TimezoneModal } from '../components/food/TimezoneModal'
@@ -73,6 +74,7 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
   const { user, loading } = useAuth()
+  const entitlement = useEntitlement(user?.id)
   const [logs, setLogs] = useState<FitnessLog[] | null>(null)
   const [streak, setStreak] = useState<Streak | null>(null)
   const [badges, setBadges] = useState<Badge[] | null>(null)
@@ -82,6 +84,7 @@ export default function Dashboard() {
   const [loadError, setLoadError] = useState(false)
   const [newBadges, setNewBadges] = useState<Badge[]>([])
   const [scanOpen, setScanOpen] = useState(false)
+  const [scanTierNotice, setScanTierNotice] = useState(false)
   const [scanToast, setScanToast] = useState<{ calories: number; scanId: string } | null>(null)
   const [undoingMeal, setUndoingMeal] = useState(false)
   const [undoError, setUndoError] = useState<string | null>(null)
@@ -276,7 +279,17 @@ export default function Dashboard() {
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Link to="/log"><Button size="lg">Log activity</Button></Link>
-              <Button size="lg" variant="secondary" onClick={() => setScanOpen(true)}>
+              <Button
+                size="lg"
+                variant="secondary"
+                onClick={() => {
+                  if (entitlement && !entitlement.features.ai_tools) {
+                    setScanTierNotice(true)
+                    return
+                  }
+                  setScanOpen(true)
+                }}
+              >
                 Scan food
               </Button>
               <Link
@@ -286,6 +299,12 @@ export default function Dashboard() {
                 View badges →
               </Link>
             </div>
+            {(scanTierNotice || (entitlement !== null && !entitlement.features.ai_tools)) && (
+              <p role="status" className="mt-2 max-w-md text-[12px] text-muted">
+                AI photo and text estimates are part of Plus. Ask your coach to enable access;
+                manual logging and the food database stay free.
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-4 sm:flex-col sm:gap-1">
