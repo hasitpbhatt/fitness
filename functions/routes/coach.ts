@@ -4,6 +4,7 @@
 // member's daily coach replies, and failed upstream calls refund it.
 
 import { Hono } from 'hono'
+import { trackEvent } from '../lib/analytics'
 import { canUseAITools } from '../lib/entitlements'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
 import { getSession } from '../lib/session'
@@ -11,6 +12,8 @@ import { addDays, localDate, quotaDay } from '../lib/time'
 import type { Bindings } from '../lib/types'
 
 const app = new Hono<{ Bindings: Bindings }>()
+
+app.use('/api/fitness/coach', trackEvent('coach_reply', 'coach'))
 
 const COACH_MESSAGES_PER_DAY = 20
 const COACH_TIER_MESSAGE = 'The AI coach is part of Plus. Ask your coach to enable access.'

@@ -2357,6 +2357,107 @@ try {
     check('notification admin without cookie -> 401', anon.status === 401, JSON.stringify(anon.body))
   }
 
+  console.log('\n-- analytics --')
+  {
+    const analytics = await json(await call('/api/admin/analytics?days=30', { headers: authHeaders }))
+    check(
+      'admin analytics reports the window, members, and daily activity',
+      analytics.status === 200 &&
+        analytics.body.window?.days === 30 &&
+        analytics.body.window?.start !== analytics.body.window?.end &&
+        analytics.body.members?.total >= 2 &&
+        analytics.body.members?.onboarded >= 1 &&
+        analytics.body.activity?.series?.length === 30 &&
+        analytics.body.activity?.active >= 1 &&
+        typeof analytics.body.activity?.returning === 'number' &&
+        typeof analytics.body.activity?.dau === 'number',
+      JSON.stringify(analytics.body),
+    )
+
+    check(
+      'analytics funnels estimate attempts into logged meals',
+      analytics.body.funnel?.estimate_attempts >= 1 &&
+        analytics.body.funnel?.estimate_successes === 0 &&
+        analytics.body.funnel?.meals_logged >= 1 &&
+        analytics.body.funnel?.logged_per_success === null,
+      JSON.stringify(analytics.body.funnel),
+    )
+
+    const scan = analytics.body.reliability?.scan
+    check(
+      'scan reliability includes latency, errors, and per-surface counts',
+      scan?.calls >= 1 &&
+        scan?.successes === 0 &&
+        scan?.failures >= 1 &&
+        scan?.errors?.['503:upstream_error'] >= 1 &&
+        scan?.latency_ms?.p50 >= 0 &&
+        scan?.latency_ms?.p95 >= scan?.latency_ms?.p50 &&
+        (scan?.by_surface?.photo?.calls ?? 0) >= 1 &&
+        (scan?.by_surface?.text?.calls ?? 0) >= 1 &&
+        (scan?.by_surface?.suggest?.calls ?? 0) >= 1,
+      JSON.stringify(scan),
+    )
+
+    check(
+      'coach reliability is tracked separately',
+      analytics.body.reliability?.coach?.calls >= 1 &&
+        analytics.body.reliability?.coach?.successes === 0,
+      JSON.stringify(analytics.body.reliability?.coach),
+    )
+
+    check(
+      'access grants are summarized',
+      analytics.body.access?.grants?.some(
+        (grant) => grant.tier === 'plus' && grant.status === 'revoked' && grant.count >= 1,
+      ),
+      JSON.stringify(analytics.body.access),
+    )
+
+    const leaked = await db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM fitness_events
+         WHERE properties LIKE '%rice and dal%'
+            OR properties LIKE '%data:image%'
+            OR properties LIKE '%How is my week%'
+            OR properties LIKE '%grounded%'`,
+      )
+      .first()
+    check('analytics does not store meal, image, or chat content', leaked?.count === 0)
+
+    const nonAdmin = await json(
+      await call('/api/admin/analytics', {
+        headers: { cookie: 'fitness_session=other-token', 'content-type': 'application/json' },
+      }),
+    )
+    const anon = await json(await call('/api/admin/analytics'))
+    const badDays = await json(
+      await call('/api/admin/analytics?days=0', { headers: authHeaders }),
+    )
+    check(
+      'analytics is admin-only and validates the window',
+      nonAdmin.status === 403 && anon.status === 401 && badDays.status === 400,
+      JSON.stringify({ nonAdmin: nonAdmin.status, anon: anon.status, badDays: badDays.status }),
+    )
+
+    const lastEvent = await db
+      .prepare('SELECT MAX(id) AS id FROM fitness_events')
+      .first()
+    await call('/api/fitness/scan/text', {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({ description: 'x' }),
+    })
+    const newEvents = await db
+      .prepare('SELECT surface FROM fitness_events WHERE id > ?')
+      .bind(lastEvent?.id ?? 0)
+      .all()
+    check(
+      'each tracked route records exactly one event',
+      newEvents.results.length === 1 && newEvents.results[0]?.surface === 'text',
+      JSON.stringify(newEvents.results),
+    )
+  }
+
   console.log('\n-- guard & logout --')
   {
     const { status } = await json(await call('/api/fitness/log/today'))

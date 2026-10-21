@@ -14,6 +14,7 @@
 // a larger text model because no image is sent.
 
 import { Hono } from 'hono'
+import { trackEvent } from '../lib/analytics'
 import { newId } from '../lib/crypto'
 import { canUseAITools } from '../lib/entitlements'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
@@ -23,6 +24,12 @@ import { localDate, quotaDay } from '../lib/time'
 import type { Bindings } from '../lib/types'
 
 const app = new Hono<{ Bindings: Bindings }>()
+
+app.use('/api/fitness/scan', trackEvent('scan_estimate', 'photo'))
+app.use('/api/fitness/scan/text', trackEvent('scan_estimate', 'text'))
+app.use('/api/fitness/scan/suggest', trackEvent('scan_estimate', 'suggest'))
+app.use('/api/fitness/scan/refine', trackEvent('scan_estimate', 'refine'))
+app.use('/api/fitness/log/scan', trackEvent('scan_logged', 'log'))
 
 const MAX_IMAGE_CHARS = 10_000_000 // ~7.5 MB binary once base64 is decoded
 const MAX_ITEMS = 20

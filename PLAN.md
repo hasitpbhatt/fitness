@@ -49,12 +49,12 @@ back to these.
   `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
   `0005_scan_ledger_and_welcome_slot.sql`, `0006_macro_targets.sql`, `0007_habits.sql`,
   `0008_measurements.sql`, `0009_foods.sql`, `0010_notifications.sql`,
-  `0011_coach.sql`, `0012_meal_plan_foods.sql`, `0013_onboarding.sql`, and
-  `0014_entitlements.sql` exist in source, apply cleanly locally, and are awaiting the
-  remote window.
+  `0011_coach.sql`, `0012_meal_plan_foods.sql`, `0013_onboarding.sql`,
+  `0014_entitlements.sql`, and `0015_analytics.sql` exist in source, apply cleanly
+  locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 165/165.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 173/173.
 - New UX exists locally: first-run goal + timezone onboarding, photo or text estimate,
   editable description + re-estimate, clarification questions, ranges, quota, manual
   fallback, timezone confirmation, macro
@@ -64,8 +64,10 @@ back to these.
   notifications with admin compose/schedule, a shared AI usage meter, a grounded AI coach
   with starter prompts, a clear-chat action, and a separate 20-message daily budget, and a
   seven-day vegetarian/non-vegetarian meal plan scaled to targets with a print/PDF view,
-  an admin-only read-only member directory with search and activity counts, and
-  staff-provisioned access tiers with an admin Access page and member AI gating.
+  an admin-only read-only member directory with search and activity counts,
+  staff-provisioned access tiers with an admin Access page and member AI gating, and an
+  admin analytics page with the AI funnel, scan/coach reliability, latency, quota blocks,
+  daily activity, and access counts.
 
 ### Freellm (production)
 
@@ -165,7 +167,7 @@ admin UI shipped in the member bundle.
 | C-34 | Health-platform sync (Apple Health/Google Fit) | none | native wrapper or Health Connect; PWA cannot; defer (**P3**) |
 | C-35 | Haptics/micro-interactions/micro-wins | partial | haptics, reduced-motion paths, success micro-wins (**P3**) |
 | C-36 | Terms, privacy, data export/delete, unsubscribe | none | legal pages + account export/delete (**P2**) |
-| C-37 | Analytics/observability | basic logs only | funnel, scan reliability, quota, latency, cost, retention (**P1/P2**) |
+| C-37 | Analytics/observability | PARTIAL | `0015_analytics.sql`; `/admin/analytics` shows AI funnel, scan/coach success/error/latency, quota blocks, DAU/WAU/MAU, returning members, and access counts; no per-request cost or cohort-retention tables yet (**P1/P2**) |
 | C-38 | Pricing/payment/finance/EMI/countdown/money-back | none | **EXCLUDED** — payment integration by instruction |
 | C-39 | Security anti-patterns: name+phone identity, admin UI in public bundle | Google OAuth; server-side authz/admin | deliberately not copied; keep the stronger model (**DONE**) |
 
@@ -228,24 +230,26 @@ mandatory.
    `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
    `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`,
    `0009_foods.sql`, `0010_notifications.sql`, `0011_coach.sql`,
-   `0012_meal_plan_foods.sql`, `0013_onboarding.sql`, and `0014_entitlements.sql`
-   remotely in a short window.
+   `0012_meal_plan_foods.sql`, `0013_onboarding.sql`, `0014_entitlements.sql`, and
+   `0015_analytics.sql` remotely in a short window.
 4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns and
    `onboarding_complete`),
    `fitness_scan_usage`, `fitness_coach_usage`, `scan_data`, `fitness_scan_ledger`,
    `fitness_habits`, `fitness_measurements`, `fitness_foods`, `fitness_notifications`,
    `fitness_notification_views`, four meal-plan food seeds (chicken breast, boiled egg,
    tofu, soya chunks), macro columns on `fitness_logs`, partial
-   `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`, and
-   `fitness_entitlements` with existing fitness members backfilled to `plus`, active.
+   `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`,
+   `fitness_entitlements` with existing fitness members backfilled to `plus`, active,
+   and `fitness_events` with `idx_fitness_events_name_time`,
+   `idx_fitness_events_user_time`, and `idx_fitness_events_time`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
    7-day rollup, measurement history, food search/portion logging, coach reply and
    clear, meal plan for both diets with print preview, first-run onboarding for a fresh
    account, dashboard goal progress, admin member search, admin access grant/trial/revoke,
-   free-member AI gating, notification feed/admin, quota increments, 21st call 429,
-   duplicate 409.
+   free-member AI gating, admin analytics funnel/activity/reliability, notification
+   feed/admin, quota increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -265,6 +269,7 @@ mandatory.
 - [ ] Admin searches the member directory and sees onboarding/timezone, goals, and activity.
 - [ ] A free member sees the Plus gate on AI scan/search/coach; manual logging still works.
 - [ ] Admin grants/trials/revokes access; the member's AI tools unlock and relock accordingly.
+- [ ] Admin analytics shows activity, AI funnel, reliability, and access counts after a scan.
 - [ ] Admin sends a banner/popup; member view and dismiss counts update.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
@@ -275,10 +280,10 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002-0014; old code ignores the ledger,
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0015; old code ignores the ledger,
   macro columns, habits, measurements, foods, notification, coach-usage, onboarding
-  columns, and entitlement table, and still benefits from the welcome-row index
-  exception; the extra food seeds are harmless.
+  columns, entitlement and analytics tables, and still benefits from the welcome-row
+  index exception; the extra food seeds are harmless.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
 ---
@@ -527,9 +532,20 @@ The first release is done when:
   meal plans, habits, and measurements remain free, and admins always keep access.
   Scheduler-based expiry and grant/revoke notifications are still pending. Fitness
   **165/165 checks**, typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-37
-  baseline analytics; C-12 photo compare waits on private storage approval. Land
-  observability/cost guardrails alongside.
+- **2026-10-20 - baseline analytics (C-37 partial):** added `0015_analytics.sql` with
+  privacy-safe `fitness_events` (no photos, descriptions, or chat text) and indexes by
+  name/time and user/time. Scan estimate/log and coach replies record status, canonical
+  error code, latency, and coarse counts through best-effort middleware that cannot change
+  member responses. Added admin-only `GET /api/admin/analytics?days=1-90` and
+  `/admin/analytics` with AI estimate→logged funnel, scan/coach success and error
+  breakdowns with p50/p95 latency, quota blocks, DAU/WAU/MAU, returning members, daily
+  activity, and provisioned-access counts. Reliability is capped to the latest 10,000
+  events and labels the view as sampled when capped. Per-request cost and cohort-retention
+  tables remain pending. Fitness **173/173 checks**, typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Wave 1's planned baseline batch is
+  implemented; remaining partials are C-37 cost/cohort retention and C-02
+  scheduler-based expiry plus grant/revoke notifications. C-12 photo compare waits on
+  private storage approval.
 
 ## 12. Working agreement
 

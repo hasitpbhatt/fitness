@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import adminMembersRoutes from '../../functions/routes/adminMembers'
+import analyticsRoutes from '../../functions/routes/analytics'
 import authRoutes from '../../functions/routes/auth'
 import coachRoutes from '../../functions/routes/coach'
 import entitlementRoutes from '../../functions/routes/entitlements'
@@ -27,6 +28,7 @@ app.get('/api/health', async (c) => {
 })
 
 app.route('/', adminMembersRoutes)
+app.route('/', analyticsRoutes)
 app.route('/', authRoutes)
 app.route('/', coachRoutes)
 app.route('/', entitlementRoutes)
