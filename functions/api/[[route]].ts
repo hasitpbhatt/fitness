@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import authRoutes from '../routes/auth'
+import coachRoutes from '../routes/coach'
 import fitnessRoutes from '../routes/fitness'
 import foodRoutes from '../routes/foods'
 import habitRoutes from '../routes/habits'
@@ -46,6 +47,7 @@ app.get('/api/health', async (c) => {
 
 // ------------------------------------------------------------- routers
 app.route('/', authRoutes)
+app.route('/', coachRoutes)
 app.route('/', fitnessRoutes)
 app.route('/', foodRoutes)
 app.route('/', habitRoutes)

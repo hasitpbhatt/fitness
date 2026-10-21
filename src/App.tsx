@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import AppShell from './components/AppShell'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
+import Coach from './pages/Coach'
 import Dashboard from './pages/Dashboard'
 import Foods from './pages/Foods'
 import Log from './pages/Log'
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/install" element={<Install />} />
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/coach" element={<Coach />} />
           <Route path="/log" element={<Log />} />
           <Route path="/foods" element={<Foods />} />
           <Route path="/achievements" element={<Achievements />} />

@@ -215,6 +215,11 @@ export type ScanQuota = {
   limit: number
 }
 
+export type CoachMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 export type ScanQuestion = {
   item_name?: string
   question: string

@@ -11,6 +11,7 @@ import { NotificationProvider } from './notifications/NotificationProvider'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/coach', label: 'Coach' },
   { to: '/log', label: 'Log' },
   { to: '/foods', label: 'Foods' },
   { to: '/measurements', label: 'Measurements' },

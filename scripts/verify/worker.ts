@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import authRoutes from '../../functions/routes/auth'
+import coachRoutes from '../../functions/routes/coach'
 import fitnessRoutes from '../../functions/routes/fitness'
 import foodRoutes from '../../functions/routes/foods'
 import habitRoutes from '../../functions/routes/habits'
@@ -23,6 +24,7 @@ app.get('/api/health', async (c) => {
 })
 
 app.route('/', authRoutes)
+app.route('/', coachRoutes)
 app.route('/', fitnessRoutes)
 app.route('/', foodRoutes)
 app.route('/', habitRoutes)

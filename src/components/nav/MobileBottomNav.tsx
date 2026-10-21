@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/coach', label: 'Coach' },
   { to: '/log', label: 'Log' },
   { to: '/achievements', label: 'Badges' },
   { to: '/leaderboard', label: 'Rank' },
@@ -16,7 +17,7 @@ export function MobileBottomNav() {
             key={item.to}
             to={item.to}
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 px-4 py-1 text-[11px] font-medium transition-colors ${
+              `flex flex-col items-center gap-1 px-3 py-1 text-[11px] font-medium transition-colors ${
                 isActive ? 'text-accent' : 'text-muted hover:text-content'
               }`
             }

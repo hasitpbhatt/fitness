@@ -35,6 +35,7 @@ export function MobileMenu({
         </div>
         <nav className="flex flex-col gap-1">
           <Link to="/dashboard" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Dashboard</Link>
+          <Link to="/coach" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">AI coach</Link>
           <Link to="/log" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Log</Link>
           <Link to="/foods" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Foods</Link>
           <Link to="/measurements" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Measurements</Link>

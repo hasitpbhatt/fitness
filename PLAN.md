@@ -48,17 +48,18 @@ back to these.
 - Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql`,
   `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
   `0005_scan_ledger_and_welcome_slot.sql`, `0006_macro_targets.sql`, `0007_habits.sql`,
-  `0008_measurements.sql`, `0009_foods.sql`, and `0010_notifications.sql` exist in source,
-  apply cleanly locally, and are awaiting the remote window.
+  `0008_measurements.sql`, `0009_foods.sql`, `0010_notifications.sql`, and
+  `0011_coach.sql` exist in source, apply cleanly locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 124/124.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 134/134.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
   with quick-add chips plus a 7-day strip, weight/waist/hips/arms history, and a seeded
   food database with portion scaling, manual entry, AI food search options, and in-app
-  notifications with admin compose/schedule, and a shared AI usage meter.
+  notifications with admin compose/schedule, a shared AI usage meter, and a grounded AI coach
+  with starter prompts, a clear-chat action, and a separate 20-message daily budget.
 
 ### Freellm (production)
 
@@ -142,8 +143,8 @@ admin UI shipped in the member bundle.
 | C-18 | AI photo scan + recalculate | DONE | keep; explicit "not counted" on failure (**DONE**) |
 | C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | DONE | water/protein/sleep rollup, stretch quick-add, chips, 7-day strip |
 | C-20 | Human food-photo review queue / community-approved DB | none | pending/approve/merge queue (**P3**) |
-| C-21 | AI coach chat grounded in plan/progress, 20/day, clear | none | grounded chat, daily quota, clear, starter prompts (**P1**) |
-| C-22 | AI usage meters + friendly exhaustion copy | PARTIAL | shared meter/copy on scan + food search; coach meter arrives with C-21 (**PARTIAL**) |
+| C-21 | AI coach chat grounded in plan/progress, 20/day, clear | DONE | `/coach`, grounded in targets/goals/streak/measurements/7-day logs, separate 20/day quota, clear chat, starter prompts |
+| C-22 | AI usage meters + friendly exhaustion copy | DONE | shared meter/copy on scan, food search, and coach; actions disable at exhaustion or when unconfigured |
 | C-23 | Push + in-app popups + constant reminder banner + view counts | in-app DONE | in-app popups/banner, view tracking; VAPID push pending keys + dispatcher (**PARTIAL**) |
 | C-24 | Notification admin: compose, schedule, audience, test, cancel | DONE | admin console, scheduling, audience, test, cancel, view counts |
 | C-25 | Email lifecycle/campaigns/unsubscribe | none | welcome + weekly summary + unsubscribe; campaigns later (**P2**) |
@@ -218,18 +219,19 @@ mandatory.
 2. Verify with `npx wrangler pages secret list --project-name fitness`.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
    `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
-   `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`, and
-   `0009_foods.sql`, and `0010_notifications.sql` remotely in a short window.
+   `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`,
+   `0009_foods.sql`, `0010_notifications.sql`, and `0011_coach.sql` remotely in a
+   short window.
 4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns),
-   `fitness_scan_usage`, `scan_data`, `fitness_scan_ledger`, `fitness_habits`,
-   `fitness_measurements`, `fitness_foods`, `fitness_notifications`,
+   `fitness_scan_usage`, `fitness_coach_usage`, `scan_data`, `fitness_scan_ledger`,
+   `fitness_habits`, `fitness_measurements`, `fitness_foods`, `fitness_notifications`,
    `fitness_notification_views`, macro columns on `fitness_logs`, partial
    `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
-   7-day rollup, measurement history, food search/portion logging, notification
-   feed/admin, quota increments, 21st call 429, duplicate 409.
+   7-day rollup, measurement history, food search/portion logging, coach reply and
+   clear, notification feed/admin, quota increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -242,6 +244,7 @@ mandatory.
 - [ ] Measurement save/update/delete persists and keeps omitted fields.
 - [ ] Food search finds seeds/brands; portion scaling and manual entry add nutrition.
 - [ ] AI food search returns options, scales the chosen portion, and spends one estimate.
+- [ ] Coach uses recent data, answers a starter prompt, clears, and spends one of 20.
 - [ ] Admin sends a banner/popup; member view and dismiss counts update.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
@@ -252,9 +255,9 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002-0010; old code ignores the ledger,
-  macro columns, habits, measurements, foods, and notification tables and still benefits
-  from the welcome-row index exception.
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0011; old code ignores the ledger,
+  macro columns, habits, measurements, foods, notification, and coach-usage tables and
+  still benefits from the welcome-row index exception.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
 ---
@@ -274,6 +277,7 @@ mandatory.
 | Measurements | Upsert keeps omitted fields; history/delete; date window | verify |
 | Foods | Seeded search, brands, portion math, manual add, merge into day | verify |
 | AI food search | Option normalization, quota spend/refund, model prompt | verify |
+| AI coach | Grounded prompt, role validation, quota spend/refund/ceiling | verify |
 | Notifications | Audience/schedule, view/dismiss, admin test/cancel | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
@@ -459,9 +463,16 @@ The first release is done when:
   usage bar. The scan modal and `/foods` AI search now share that meter, disable AI
   actions when exhausted or unconfigured, and the API quota message is centralized.
   The coach meter lands with C-21. Fitness **124/124 checks**, typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-21
-  coach and its shared meter; C-12 photo compare waits on private storage approval.
-  Land observability/cost guardrails alongside.
+- **2026-10-20 - AI coach (C-21, C-22):** added `0011_coach.sql` with a separate
+  per-user daily coach budget. `POST /api/fitness/coach` grounds the system prompt in the
+  member's targets, goals, streak, measurements, last 7 days, and today's logs; it
+  validates chat roles, rejects prompt-shaped history, spends one of 20 daily messages,
+  and refunds on upstream failure. Added `/coach` with starter prompts, clear-chat,
+  accessible log semantics, and the shared usage meter, plus desktop/mobile navigation.
+  Fitness **134/134 checks**, typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-26
+  meal plan; C-12 photo compare waits on private storage approval. Land
+  observability/cost guardrails alongside.
 
 ## 12. Working agreement
 

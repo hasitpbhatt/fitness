@@ -125,7 +125,7 @@ export function Input({ className = '', ...props }: InputProps) {
   )
 }
 
-export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+export interface TextareaProps extends React.ComponentPropsWithRef<'textarea'> {}
 
 export function Textarea({ className = '', ...props }: TextareaProps) {
   return (
