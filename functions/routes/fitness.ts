@@ -19,6 +19,59 @@ const TARGET_LIMITS = {
 } as const
 const TARGET_FIELDS = Object.keys(TARGET_LIMITS) as (keyof typeof TARGET_LIMITS)[]
 
+const GOAL_METRICS: Record<string, string> = {
+  workout: 'duration_min',
+  nutrition: 'calories',
+  water: 'water_ml',
+  sleep: 'COALESCE(hours, duration_min / 60.0)',
+}
+const GOAL_UNITS: Record<string, string> = {
+  workout: 'min',
+  nutrition: 'kcal',
+  water: 'ml',
+  sleep: 'h',
+  custom: '',
+}
+
+function goalPeriodStart(period: string, today: string): string {
+  if (period === 'week') return weekStart(today)
+  if (period === 'month') return `${today.slice(0, 7)}-01`
+  return today
+}
+
+async function addGoalProgress(
+  env: Bindings,
+  userId: string,
+  goals: Record<string, unknown>[],
+  today: string,
+) {
+  return Promise.all(
+    goals.map(async (goal) => {
+      const type = String(goal.type ?? '')
+      const period = String(goal.period ?? 'day')
+      const periodStart = goalPeriodStart(period, today)
+      const metric = GOAL_METRICS[type]
+      let progress = Number(goal.current ?? 0)
+      if (metric) {
+        const row = await env.DB.prepare(
+          `SELECT COALESCE(SUM(${metric}), 0) AS progress
+           FROM fitness_logs
+           WHERE user_id = ? AND type = ? AND recorded_at >= ? AND recorded_at <= ?`,
+        )
+          .bind(userId, type, periodStart, today)
+          .first<{ progress: number }>()
+        progress = Number(row?.progress ?? 0)
+      }
+      return {
+        ...goal,
+        progress: Math.round(progress * 10) / 10,
+        period_start: periodStart,
+        unit: GOAL_UNITS[type] ?? '',
+      }
+    }),
+  )
+}
+
 function correctionDate(value: unknown, today: string): string | null {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
   if (value > today) return null
@@ -379,13 +432,22 @@ app.get('/api/fitness/logs', async (c) => {
   return c.json({ logs: logs.results })
 })
 
-// Get user goals
+// Get user goals with progress for the current local period
 app.get('/api/fitness/goals', async (c) => {
   const cookie = c.req.header('cookie') ?? null
   const session = await getSession(c.env.fitness_sessions, cookie)
   if (!session) return c.json({ error: 'unauthorized' }, 401)
-  const goals = await c.env.DB.prepare('SELECT * FROM fitness_goals WHERE user_id = ?').bind(session.userId).all()
-  return c.json({ goals: goals.results })
+  const timezone = await resolveTimezone(c.env, session.userId, c.req.query('tz'))
+  const today = localDate(timezone)
+  const goals = await c.env.DB.prepare(
+    'SELECT * FROM fitness_goals WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC',
+  )
+    .bind(session.userId)
+    .all<Record<string, unknown>>()
+  return c.json({
+    goals: await addGoalProgress(c.env, session.userId, goals.results, today),
+    date: today,
+  })
 })
 
 // Set or update a goal

@@ -23,6 +23,7 @@ type DirectoryRow = {
   created_at: number
   timezone: string | null
   timezone_source: string | null
+  onboarding_complete: number
   goal_count: number
   last_log_date: string | null
   logs_7d: number
@@ -64,6 +65,7 @@ app.get('/api/admin/members', async (c) => {
   const rows = await c.env.DB.prepare(
     `SELECT u.id, u.email, u.username, u.display_name, u.role, u.tier, u.created_at,
        p.timezone, p.timezone_source,
+       COALESCE(p.onboarding_complete, 0) AS onboarding_complete,
        (SELECT COUNT(*) FROM fitness_goals g WHERE g.user_id = u.id) AS goal_count,
        (SELECT MAX(l.recorded_at) FROM fitness_logs l WHERE l.user_id = u.id) AS last_log_date,
        (SELECT COUNT(*) FROM fitness_logs l WHERE l.user_id = u.id AND l.recorded_at >= ?) AS logs_7d
@@ -83,6 +85,7 @@ app.get('/api/admin/members', async (c) => {
     members: rows.results.map((row) => ({
       ...row,
       tier: row.tier ?? 'free',
+      onboarding_complete: row.onboarding_complete === 1,
       logs_7d: Number(row.logs_7d ?? 0),
       goal_count: Number(row.goal_count ?? 0),
     })),

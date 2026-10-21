@@ -12,6 +12,7 @@ import AdminMembers from './pages/AdminMembers'
 import AdminNotifications from './pages/AdminNotifications'
 import Leaderboard from './pages/Leaderboard'
 import Measurements from './pages/Measurements'
+import Onboarding from './pages/Onboarding'
 import Install from './pages/Install'
 import NotFound from './pages/NotFound'
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt'
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/install" element={<Install />} />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route element={<AppShell />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/coach" element={<Coach />} />

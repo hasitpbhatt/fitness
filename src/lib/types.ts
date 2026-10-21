@@ -45,6 +45,9 @@ export type FitnessGoal = {
   target: number
   current: number
   period: string
+  progress?: number
+  period_start?: string
+  unit?: string
   updated_at: number
   created_at: number
 }
@@ -82,6 +85,7 @@ export type FitnessProfile = {
   confirmed: boolean
   detected: string | null
   signedIn: boolean
+  onboarded: boolean
 }
 
 export type MacroTargets = {

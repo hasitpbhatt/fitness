@@ -466,7 +466,15 @@ try {
   }
   {
     const { status, body } = await json(await call('/api/fitness/goals', { headers: authHeaders }))
+    const goal = body.goals?.[0]
     check('goals list has 1', status === 200 && body.goals?.length === 1)
+    check(
+      'goal includes current-period progress',
+      typeof goal?.progress === 'number' &&
+        goal?.unit === 'min' &&
+        /^\d{4}-\d{2}-\d{2}$/.test(goal?.period_start ?? ''),
+      JSON.stringify(goal),
+    )
   }
   {
     // A caller-supplied id must never let another user replace this goal.
@@ -497,6 +505,76 @@ try {
       'goal id from another user -> 404 and unchanged',
       status === 404 && unchanged?.target === 150,
       JSON.stringify({ status, body, unchanged }),
+    )
+  }
+
+  console.log('\n-- onboarding --')
+  {
+    const otherHeaders = { cookie: 'fitness_session=other-token', 'content-type': 'application/json' }
+    const before = await json(await call('/api/fitness/profile', { headers: otherHeaders }))
+    check(
+      'new member starts with onboarding pending',
+      before.status === 200 && before.body.onboarded === false,
+      JSON.stringify(before.body),
+    )
+
+    const badGoal = await json(
+      await call('/api/fitness/onboarding', {
+        method: 'POST',
+        headers: otherHeaders,
+        body: JSON.stringify({ goal_type: 'finance', timezone: 'Asia/Kolkata' }),
+      }),
+    )
+    check('onboarding rejects an unknown goal -> 400', badGoal.status === 400)
+
+    const badZone = await json(
+      await call('/api/fitness/onboarding', {
+        method: 'POST',
+        headers: otherHeaders,
+        body: JSON.stringify({ goal_type: 'water', timezone: 'Not/AZone' }),
+      }),
+    )
+    check('onboarding rejects an invalid timezone -> 400', badZone.status === 400)
+
+    const saved = await json(
+      await call('/api/fitness/onboarding', {
+        method: 'POST',
+        headers: otherHeaders,
+        body: JSON.stringify({ goal_type: 'water', goal_target: 3000, timezone: 'Asia/Kolkata' }),
+      }),
+    )
+    check(
+      'onboarding saves the focus goal and confirms the timezone',
+      saved.status === 200 &&
+        saved.body.onboarded === true &&
+        saved.body.confirmed === true &&
+        saved.body.goal?.type === 'water' &&
+        saved.body.goal?.target === 3000 &&
+        saved.body.timezone === 'Asia/Kolkata',
+      JSON.stringify(saved.body),
+    )
+
+    const after = await json(await call('/api/fitness/profile', { headers: otherHeaders }))
+    check(
+      'profile reports onboarding complete',
+      after.status === 200 &&
+        after.body.onboarded === true &&
+        after.body.confirmed === true &&
+        after.body.timezone === 'Asia/Kolkata',
+      JSON.stringify(after.body),
+    )
+
+    const goals = await json(
+      await call('/api/fitness/goals?tz=Asia%2FKolkata', { headers: otherHeaders }),
+    )
+    check(
+      'onboarding goal has an empty current-period progress',
+      goals.status === 200 &&
+        goals.body.goals?.length === 1 &&
+        goals.body.goals[0].type === 'water' &&
+        goals.body.goals[0].progress === 0 &&
+        goals.body.goals[0].unit === 'ml',
+      JSON.stringify(goals.body),
     )
   }
 
@@ -1920,7 +1998,8 @@ try {
         verifier?.email === 'verify@example.com' &&
         verifier?.goal_count >= 1 &&
         typeof verifier?.logs_7d === 'number' &&
-        typeof verifier?.timezone === 'string',
+        typeof verifier?.timezone === 'string' &&
+        typeof verifier?.onboarding_complete === 'boolean',
       JSON.stringify(verifier ?? directory.body),
     )
 

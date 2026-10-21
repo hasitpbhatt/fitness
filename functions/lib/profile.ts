@@ -4,18 +4,20 @@ import { isValidTimezone } from './time'
 export type FitnessProfile = {
   timezone: string | null
   timezone_source: 'auto' | 'user'
+  onboarding_complete: boolean
 }
 
 export async function getFitnessProfile(env: Bindings, userId: string): Promise<FitnessProfile | null> {
   const row = await env.DB.prepare(
-    'SELECT timezone, timezone_source FROM fitness_profiles WHERE user_id = ?',
+    'SELECT timezone, timezone_source, onboarding_complete FROM fitness_profiles WHERE user_id = ?',
   )
     .bind(userId)
-    .first<{ timezone: string | null; timezone_source: string | null }>()
+    .first<{ timezone: string | null; timezone_source: string | null; onboarding_complete: number | null }>()
   if (!row) return null
   return {
     timezone: row.timezone && isValidTimezone(row.timezone) ? row.timezone : null,
     timezone_source: row.timezone_source === 'user' ? 'user' : 'auto',
+    onboarding_complete: row.onboarding_complete === 1,
   }
 }
 

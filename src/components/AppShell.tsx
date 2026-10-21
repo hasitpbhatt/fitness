@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, Navigate, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import type { FitnessProfile } from '../lib/types'
+import { detectTimezone } from '../lib/timezone'
 import { MobileBottomNav } from './nav/MobileBottomNav'
 import { MobileMenu } from './nav/MobileMenu'
 import { NotificationBanner } from './notifications/NotificationBanner'
@@ -32,6 +34,7 @@ function AppShellContent() {
   const { user, loading, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const [streak, setStreak] = useState<number | null>(null)
+  const [onboarded, setOnboarded] = useState<boolean | null>(null)
   const location = useLocation()
   const displayNavItems =
     user?.role === 'admin'
@@ -59,6 +62,35 @@ function AppShellContent() {
       cancelled = true
     }
   }, [user, location.pathname])
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    api
+      .get<FitnessProfile>(`/fitness/profile?tz=${encodeURIComponent(detectTimezone())}`)
+      .then((profile) => {
+        if (!cancelled) setOnboarded(profile.onboarded)
+      })
+      .catch(() => {
+        // Never trap a signed-in member behind a failed preference lookup.
+        if (!cancelled) setOnboarded(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
+
+  if (user && onboarded === false) return <Navigate to="/onboarding" replace />
+
+  if (user && onboarded === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg px-4">
+        <p className="text-[13px] text-muted" role="status">
+          Loading your setup…
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-bg">

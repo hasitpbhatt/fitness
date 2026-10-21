@@ -14,6 +14,7 @@ type Member = {
   created_at: number
   timezone: string | null
   timezone_source: string | null
+  onboarding_complete: boolean
   goal_count: number
   last_log_date: string | null
   logs_7d: number
@@ -37,8 +38,13 @@ function formatDate(value: string | number | null): string {
   })
 }
 
-function Badge({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'accent' }) {
-  const className = tone === 'accent' ? 'bg-accent/10 text-accent' : 'bg-surface-2 text-muted'
+function Badge({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'accent' | 'warn' }) {
+  const className =
+    tone === 'accent'
+      ? 'bg-accent/10 text-accent'
+      : tone === 'warn'
+        ? 'bg-warn/10 text-warn'
+        : 'bg-surface-2 text-muted'
   return <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${className}`}>{children}</span>
 }
 
@@ -183,6 +189,9 @@ export default function AdminMembers() {
                     </p>
                     <Badge tone={member.role === 'admin' ? 'accent' : 'muted'}>{member.role}</Badge>
                     <Badge>{member.tier}</Badge>
+                    <Badge tone={member.onboarding_complete ? 'accent' : 'warn'}>
+                      {member.onboarding_complete ? 'onboarded' : 'setup pending'}
+                    </Badge>
                   </div>
                   <p className="truncate text-[12px] text-muted">
                     {member.email} · @{member.username}

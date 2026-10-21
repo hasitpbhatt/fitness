@@ -79,6 +79,7 @@ export interface SelectOption {
 }
 
 export interface SelectProps<T extends SelectOption = SelectOption> {
+  id?: string
   value: string
   onChange: (value: string) => void
   placeholder?: string
@@ -89,6 +90,7 @@ export interface SelectProps<T extends SelectOption = SelectOption> {
 }
 
 export function Select<T extends SelectOption = SelectOption>({
+  id,
   value,
   onChange,
   placeholder = 'Select…',
@@ -99,6 +101,7 @@ export function Select<T extends SelectOption = SelectOption>({
 }: SelectProps<T>) {
   return (
     <select
+      id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}

@@ -49,13 +49,14 @@ back to these.
   `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
   `0005_scan_ledger_and_welcome_slot.sql`, `0006_macro_targets.sql`, `0007_habits.sql`,
   `0008_measurements.sql`, `0009_foods.sql`, `0010_notifications.sql`,
-  `0011_coach.sql`, and `0012_meal_plan_foods.sql` exist in source, apply cleanly
-  locally, and are awaiting the remote window.
+  `0011_coach.sql`, `0012_meal_plan_foods.sql`, and `0013_onboarding.sql` exist in
+  source, apply cleanly locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 144/144.
-- New UX exists locally: photo or text estimate, editable description + re-estimate,
-  clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 151/151.
+- New UX exists locally: first-run goal + timezone onboarding, photo or text estimate,
+  editable description + re-estimate, clarification questions, ranges, quota, manual
+  fallback, timezone confirmation, macro
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
   with quick-add chips plus a 7-day strip, weight/waist/hips/arms history, and a seeded
   food database with portion scaling, manual entry, AI food search options, and in-app
@@ -126,7 +127,7 @@ admin UI shipped in the member bundle.
 
 | ID | FitJam capability | Us today | Coverage plan |
 | --- | --- | --- | --- |
-| C-01 | Onboarding: goal, 20-zone timezone selector, push prompt | goal + auto timezone confirm; no push prompt or manual zone list | extend first-run onboarding; manual zone picker; notification opt-in (**P1**) |
+| C-01 | Onboarding: goal, 20-zone timezone selector, push prompt | PARTIAL | first-run goal + full timezone picker, dashboard focus progress, existing profiles grandfathered; Web Push opt-in waits on VAPID (**P1**) |
 | C-02 | Staff-provisioned access tiers (Inner Circle/Transform), trials, auto-revoke, deactivation copy | single tier; Google auth | admin-granted entitlements (`free`/`plus`/`coach`) + gated UI; no payments (**P1**) |
 | C-03 | Pause/resume plan with a resume date | none | plan start/pause/resume + reminder (**P2**) |
 | C-04 | Ask-a-doubt, personal member links, coach inbox/email | none | support form + email; tokenized personal links if coaching mode lands (**P2**) |
@@ -157,7 +158,7 @@ admin UI shipped in the member bundle.
 | C-29 | Per-route SEO, sitemap, structured data, prerender | SPA shell | route meta, sitemap, JSON-LD, prerender public pages (**P2**) |
 | C-30 | Calorie/TDEE calculator lead magnet | none | public calculator + optional email capture (**P3**) |
 | C-31 | Acquisition funnel, lead CRM, sales scripts, game-plan parser | none | defer unless we run paid coaching; no payment integration (**P3**) |
-| C-32 | Admin/coach ops: members, grants, content, meal tracking, report cards, food review, calls | PARTIAL | `/admin/members` read-only directory with search, timezone state, goals, and 7-day logging; grants/content/meal tracking/report cards/food review/calls pending (**P1/P2**) |
+| C-32 | Admin/coach ops: members, grants, content, meal tracking, report cards, food review, calls | PARTIAL | `/admin/members` read-only directory with search, onboarding/timezone state, goals, and 7-day logging; grants/content/meal tracking/report cards/food review/calls pending (**P1/P2**) |
 | C-33 | i18n | none | extract strings now; add Hindi after EN parity (**P3**) |
 | C-34 | Health-platform sync (Apple Health/Google Fit) | none | native wrapper or Health Connect; PWA cannot; defer (**P3**) |
 | C-35 | Haptics/micro-interactions/micro-wins | partial | haptics, reduced-motion paths, success micro-wins (**P3**) |
@@ -172,7 +173,8 @@ admin UI shipped in the member bundle.
    acceptance, then start parity Wave 1; land observability/cost guardrails alongside.
 2. **Wave 1 — daily app:** C-13 PWA, C-14/C-19 habits, C-15 macros, C-12 measurements,
    C-16 food DB, C-17 AI search, C-23/C-24 notifications, C-21 coach, C-26 meal plan,
-   C-32 minimal admin, C-01 onboarding, C-02 entitlements, C-37 baseline analytics.
+   C-32 minimal admin (read-only), C-01 onboarding (goal/timezone), C-02 entitlements,
+   C-37 baseline analytics.
 3. **Wave 2 — training depth:** C-05/C-06/C-07/C-08 workouts/plans/routines/drops,
    C-32 content authoring, C-25 email, C-27 consultation, C-29 SEO, C-36 legal, C-03
    pause, C-04 support, C-10 comments.
@@ -223,9 +225,10 @@ mandatory.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
    `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
    `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`,
-   `0009_foods.sql`, `0010_notifications.sql`, `0011_coach.sql`, and
-   `0012_meal_plan_foods.sql` remotely in a short window.
-4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns),
+   `0009_foods.sql`, `0010_notifications.sql`, `0011_coach.sql`,
+   `0012_meal_plan_foods.sql`, and `0013_onboarding.sql` remotely in a short window.
+4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns and
+   `onboarding_complete`),
    `fitness_scan_usage`, `fitness_coach_usage`, `scan_data`, `fitness_scan_ledger`,
    `fitness_habits`, `fitness_measurements`, `fitness_foods`, `fitness_notifications`,
    `fitness_notification_views`, four meal-plan food seeds (chicken breast, boiled egg,
@@ -235,8 +238,9 @@ mandatory.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
    7-day rollup, measurement history, food search/portion logging, coach reply and
-   clear, meal plan for both diets with print preview, admin member search, notification
-   feed/admin, quota increments, 21st call 429, duplicate 409.
+   clear, meal plan for both diets with print preview, first-run onboarding for a fresh
+   account, dashboard goal progress, admin member search, notification feed/admin, quota
+   increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -250,8 +254,10 @@ mandatory.
 - [ ] Food search finds seeds/brands; portion scaling and manual entry add nutrition.
 - [ ] AI food search returns options, scales the chosen portion, and spends one estimate.
 - [ ] Coach uses recent data, answers a starter prompt, clears, and spends one of 20.
+- [ ] A fresh account lands on onboarding; goal + timezone save; dashboard shows focus
+      progress; an existing grandfathered account skips onboarding.
 - [ ] Meal plan switches veg/nonveg, reflects targets, prints/saves a clean PDF.
-- [ ] Admin searches the member directory and sees timezone, goals, and activity.
+- [ ] Admin searches the member directory and sees onboarding/timezone, goals, and activity.
 - [ ] Admin sends a banner/popup; member view and dismiss counts update.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
@@ -262,9 +268,10 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002-0012; old code ignores the ledger,
-  macro columns, habits, measurements, foods, notification, and coach-usage tables and
-  still benefits from the welcome-row index exception; the extra food seeds are harmless.
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0013; old code ignores the ledger,
+  macro columns, habits, measurements, foods, notification, coach-usage, and onboarding
+  columns and still benefits from the welcome-row index exception; the extra food seeds
+  are harmless.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
 ---
@@ -285,6 +292,7 @@ mandatory.
 | Foods | Seeded search, brands, portion math, manual add, merge into day | verify |
 | AI food search | Option normalization, quota spend/refund, model prompt | verify |
 | AI coach | Grounded prompt, role validation, quota spend/refund/ceiling | verify |
+| Onboarding | Fresh account starts pending; goal + timezone save; progress shape | verify |
 | Meal plan | 7 days, diet filtering, target scaling, top-up, totals, invalid diet | verify |
 | Admin members | Admin-only directory, search, limit validation, non-admin 403 | verify |
 | Notifications | Audience/schedule, view/dismiss, admin test/cancel | verify |
@@ -494,9 +502,16 @@ The first release is done when:
   navigation. This is the read-only support slice; grants, content authoring, meal
   tracking, report cards, food review, and calls stay with their feature milestones.
   Fitness **144/144 checks**, typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-01
-  onboarding and C-02 entitlements; C-12 photo compare waits on private storage approval.
-  Land observability/cost guardrails alongside.
+- **2026-10-20 - first-run onboarding (C-01 partial):** added `0013_onboarding.sql`
+  with existing profiles grandfathered as complete, and a signed-in
+  `POST /api/fitness/onboarding` that confirms the timezone, repairs history once, and
+  writes one focus goal. New accounts are gated to `/onboarding` for a goal plus the full
+  timezone picker; the dashboard returns goal progress for the current local day/week.
+  Web Push opt-in is still pending VAPID keys. Fitness **151/151 checks**, typecheck,
+  lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-02
+  entitlements; C-12 photo compare waits on private storage approval. Land
+  observability/cost guardrails alongside.
 
 ## 12. Working agreement
 

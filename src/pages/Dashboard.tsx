@@ -12,6 +12,7 @@ import { HabitTracker } from '../components/habits/HabitTracker'
 import { EditLogModal } from '../components/EditLogModal'
 import type {
   Badge,
+  FitnessGoal,
   FitnessLog,
   FitnessProfile,
   MacroTargets,
@@ -30,6 +31,20 @@ const TYPE_META: Record<string, { label: string; icon: string }> = {
 const TOTAL_BADGES = 8
 const SEEN_BADGES_KEY = 'fitness_seen_badges'
 const WELCOME_LOG_ACTIVITY = 'Welcome to fitness.hasit.in'
+
+const GOAL_LABELS: Record<string, string> = {
+  workout: 'Move more',
+  nutrition: 'Eat well',
+  water: 'Hydrate',
+  sleep: 'Sleep well',
+  custom: 'Your focus',
+}
+
+function goalPeriodLabel(period: string): string {
+  if (period === 'week') return 'This week'
+  if (period === 'month') return 'This month'
+  return 'Today'
+}
 
 function logSummary(log: FitnessLog): string {
   if (log.type === 'sleep') {
@@ -62,6 +77,7 @@ export default function Dashboard() {
   const [streak, setStreak] = useState<Streak | null>(null)
   const [badges, setBadges] = useState<Badge[] | null>(null)
   const [profile, setProfile] = useState<FitnessProfile | null>(null)
+  const [goals, setGoals] = useState<FitnessGoal[]>([])
   const [todayDate, setTodayDate] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [newBadges, setNewBadges] = useState<Badge[]>([])
@@ -79,13 +95,14 @@ export default function Dashboard() {
     if (!user) return
     const detected = detectTimezone()
     try {
-      const [logsData, streakData, badgeData, profileData] = await Promise.all([
+      const [logsData, streakData, badgeData, profileData, goalData] = await Promise.all([
         api.get<{ logs: FitnessLog[]; date: string; timezone: string; targets: MacroTargets }>(
           `/fitness/log/today?tz=${encodeURIComponent(detected)}`,
         ),
         api.get<{ streaks: Streak | null }>('/fitness/streaks'),
         api.get<{ badges: Badge[] }>('/fitness/badges'),
         api.get<FitnessProfile>(`/fitness/profile?tz=${encodeURIComponent(detected)}`),
+        api.get<{ goals: FitnessGoal[] }>(`/fitness/goals?tz=${encodeURIComponent(detected)}`),
       ])
       setLogs(logsData.logs)
       setTodayDate(logsData.date)
@@ -93,6 +110,7 @@ export default function Dashboard() {
       setStreak(streakData.streaks ?? null)
       setBadges(badgeData.badges)
       setProfile(profileData)
+      setGoals(goalData.goals)
       setLoadError(false)
     } catch {
       setLoadError(true)
@@ -164,6 +182,12 @@ export default function Dashboard() {
     },
     { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 },
   )
+  const focusGoal = goals[0]
+  const focusProgress = focusGoal?.progress ?? focusGoal?.current ?? 0
+  const focusPct =
+    focusGoal && focusGoal.target > 0
+      ? Math.min(100, Math.round((focusProgress / focusGoal.target) * 100))
+      : 0
 
   const confirmDetectedTimezone = async () => {
     if (!profile?.timezone) return
@@ -303,6 +327,39 @@ export default function Dashboard() {
       )}
 
       <MacroBars totals={macroTotals} targets={targets} onEditTargets={() => setTargetsOpen(true)} />
+
+      {focusGoal && (
+        <Card className="p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <div>
+              <p className="text-[12px] uppercase tracking-wide text-muted">Your focus</p>
+              <p className="mt-0.5 text-[15px] font-semibold">
+                {GOAL_LABELS[focusGoal.type] ?? 'Your focus'}
+              </p>
+            </div>
+            <p className="num text-[13px]">
+              <span className="font-semibold">{focusProgress}</span>
+              <span className="text-muted">
+                {' / '}
+                {focusGoal.target} {focusGoal.unit ?? ''}
+              </span>
+            </p>
+          </div>
+          <div
+            className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={focusGoal.target}
+            aria-valuenow={Math.min(focusProgress, focusGoal.target)}
+            aria-label={`${GOAL_LABELS[focusGoal.type] ?? 'Goal'} progress`}
+          >
+            <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${focusPct}%` }} />
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            {goalPeriodLabel(focusGoal.period)} - {focusPct}% of target
+          </p>
+        </Card>
+      )}
 
       <HabitTracker onChanged={() => void loadData()} />
 
