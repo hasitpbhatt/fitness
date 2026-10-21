@@ -54,7 +54,7 @@ back to these.
   locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 173/173.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 178/178.
 - New UX exists locally: first-run goal + timezone onboarding, photo or text estimate,
   editable description + re-estimate, clarification questions, ranges, quota, manual
   fallback, timezone confirmation, macro
@@ -132,7 +132,9 @@ admin UI shipped in the member bundle.
 | ID | FitJam capability | Us today | Coverage plan |
 | --- | --- | --- | --- |
 | C-01 | Onboarding: goal, 20-zone timezone selector, push prompt | PARTIAL | first-run goal + full timezone picker, dashboard focus progress, existing profiles grandfathered; Web Push opt-in waits on VAPID (**P1**) |
-| C-02 | Staff-provisioned access tiers (Inner Circle/Transform), trials, auto-revoke, deactivation copy | PARTIAL | `0014_entitlements.sql`; admin grant/trial/revoke at `/admin/access`; free/plus/coach with lazy expiry; AI scan/search/coach gated; scheduler and grant/revoke notifications pending; no payments (**P1**) |
+| C-02 | Staff-provisioned access tiers (Inner Circle/Transform), trials, auto-revoke, deactivation copy 
+| PARTIAL | `0014_entitlements.sql`; admin grant/trial/revoke at `/admin/access`; free/plus/coach with lazy expiry; AI 
+scan/search/coach gated; grant/revoke notifications sent; scheduler-based auto-expiry pending; no payments (**P1**) |
 | C-03 | Pause/resume plan with a resume date | none | plan start/pause/resume + reminder (**P2**) |
 | C-04 | Ask-a-doubt, personal member links, coach inbox/email | none | support form + email; tokenized personal links if coaching mode lands (**P2**) |
 | C-05 | Workout library/categories + MP4/YouTube/Bunny player | none | categories, video player, admin authoring (**P1**) |
@@ -530,8 +532,8 @@ The first release is done when:
   note. Added `/admin/access` for search plus grant/trial/revoke. Free members are blocked
   from AI scan/text/refine/search and coach with clear Plus copy; manual logging, food DB,
   meal plans, habits, and measurements remain free, and admins always keep access.
-  Scheduler-based expiry and grant/revoke notifications are still pending. Fitness
-  **165/165 checks**, typecheck, lint, build pass.
+  Grant/revoke notifications now sent via in-app feed; scheduler-based auto-expiry still pending. Fitness
+  **178/178 checks**, typecheck, lint, build pass.
 - **2026-10-20 - baseline analytics (C-37 partial):** added `0015_analytics.sql` with
   privacy-safe `fitness_events` (no photos, descriptions, or chat text) and indexes by
   name/time and user/time. Scan estimate/log and coach replies record status, canonical
@@ -541,11 +543,10 @@ The first release is done when:
   breakdowns with p50/p95 latency, quota blocks, DAU/WAU/MAU, returning members, daily
   activity, and provisioned-access counts. Reliability is capped to the latest 10,000
   events and labels the view as sampled when capped. Per-request cost and cohort-retention
-  tables remain pending. Fitness **173/173 checks**, typecheck, lint, build pass.
+  tables remain pending. Fitness **178/178 checks**, typecheck, lint, build pass.
 - **Next:** deploy remains pending explicit approval. Wave 1's planned baseline batch is
   implemented; remaining partials are C-37 cost/cohort retention and C-02
-  scheduler-based expiry plus grant/revoke notifications. C-12 photo compare waits on
-  private storage approval.
+  scheduler-based auto-expiry. C-12 photo compare waits on private storage approval.
 
 ## 12. Working agreement
 
