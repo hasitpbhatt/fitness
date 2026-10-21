@@ -13,7 +13,7 @@ export function NotificationBanner() {
   }
 
   return (
-    <div className="mb-5 flex flex-col gap-2 rounded-xl border border-accent/25 bg-accent/5 px-4 py-3 sm:flex-row sm:items-center">
+    <div className="no-print mb-5 flex flex-col gap-2 rounded-xl border border-accent/25 bg-accent/5 px-4 py-3 sm:flex-row sm:items-center">
       <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold">{banner.title}</p>
         <p className="mt-0.5 text-[12px] text-muted">{banner.body}</p>

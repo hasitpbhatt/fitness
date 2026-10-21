@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Coach from './pages/Coach'
 import Dashboard from './pages/Dashboard'
 import Foods from './pages/Foods'
+import MealPlan from './pages/MealPlan'
 import Log from './pages/Log'
 import Achievements from './pages/Achievements'
 import AdminNotifications from './pages/AdminNotifications'
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/coach" element={<Coach />} />
           <Route path="/log" element={<Log />} />
           <Route path="/foods" element={<Foods />} />
+          <Route path="/meal-plan" element={<MealPlan />} />
           <Route path="/achievements" element={<Achievements />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/measurements" element={<Measurements />} />

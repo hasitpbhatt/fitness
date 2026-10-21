@@ -1832,6 +1832,83 @@ try {
     check('food search without cookie -> 401', unauthorized.status === 401)
   }
 
+  console.log('\n-- meal plan --')
+  {
+    const unauthorized = await json(await call('/api/fitness/meal-plan'))
+    check('meal plan without cookie -> 401', unauthorized.status === 401 && unauthorized.body.error === 'unauthorized')
+
+    const invalidDiet = await json(
+      await call('/api/fitness/meal-plan?diet=junk', { headers: authHeaders }),
+    )
+    check(
+      'meal plan rejects an unknown diet -> 400',
+      invalidDiet.status === 400 && invalidDiet.body.error === 'invalid_diet',
+      JSON.stringify(invalidDiet.body),
+    )
+
+    const veg = await json(await call('/api/fitness/meal-plan?diet=veg', { headers: authHeaders }))
+    const vegDays = veg.body.days ?? []
+    const vegNames = vegDays.flatMap((day) => day.meals.flatMap((meal) => meal.items.map((item) => item.name)))
+    const vegCaloriesNearby = vegDays.every(
+      (day) => Math.abs(day.totals.calories - veg.body.target_calories) <= veg.body.target_calories * 0.12,
+    )
+    check(
+      'meal plan returns seven scaled vegetarian days',
+      veg.status === 200 &&
+        vegDays.length === 7 &&
+        veg.body.timezone === 'Asia/Kolkata' &&
+        vegDays[0]?.date === veg.body.date &&
+        new Set(vegDays.map((day) => day.date)).size === 7 &&
+        vegDays[0]?.is_today === true &&
+        vegDays.every((day) => day.meals.length === 4 && day.meals.every((meal) => meal.items.length >= 2)) &&
+        veg.body.target_calories === 2200 &&
+        veg.body.target_protein_g === 150 &&
+        vegDays.every((day) => day.totals.protein_g >= 105 && day.protein_gap_g > 0) &&
+        vegCaloriesNearby &&
+        vegNames.every((name) => !/chicken|egg/i.test(name)) &&
+        (veg.body.notes ?? []).some((note) => /protein supplement/i.test(note)),
+      JSON.stringify({
+        target: {
+          calories: veg.body.target_calories,
+          protein: veg.body.target_protein_g,
+        },
+        totals: vegDays.map((day) => day.totals),
+      }),
+    )
+    const firstDay = vegDays[0]
+    const mealSum = firstDay?.meals.reduce(
+      (sum, meal) => sum + meal.items.reduce((inner, item) => inner + item.calories, 0),
+      0,
+    )
+    check(
+      'meal plan day totals match meal items and include a protein top-up',
+      firstDay?.totals.calories === mealSum &&
+        firstDay?.meals.some((meal) => meal.items.some((item) => item.booster === true)),
+      JSON.stringify({ total: firstDay?.totals, mealSum }),
+    )
+
+    const nonveg = await json(await call('/api/fitness/meal-plan?diet=nonveg', { headers: authHeaders }))
+    const nonvegDays = nonveg.body.days ?? []
+    const nonvegNames = nonvegDays.flatMap((day) =>
+      day.meals.flatMap((meal) => meal.items.map((item) => item.name)),
+    )
+    const nonvegCaloriesNearby = nonvegDays.every(
+      (day) => Math.abs(day.totals.calories - nonveg.body.target_calories) <= nonveg.body.target_calories * 0.12,
+    )
+    check(
+      'non-vegetarian plan swaps in chicken or eggs',
+      nonveg.status === 200 &&
+        nonveg.body.diet === 'nonveg' &&
+        nonvegNames.some((name) => /chicken|egg/i.test(name)) &&
+        nonvegCaloriesNearby &&
+        nonveg.body.average_totals?.protein_g >= 130,
+      JSON.stringify({
+        totals: nonvegDays.map((day) => day.totals),
+        average: nonveg.body.average_totals,
+      }),
+    )
+  }
+
   console.log('\n-- notifications --')
   {
     const created = await json(

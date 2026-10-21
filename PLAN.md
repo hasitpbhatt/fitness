@@ -48,18 +48,20 @@ back to these.
 - Migrations applied: only `0001_initial_fitness.sql`. `0002_fitness_profiles.sql`,
   `0003_scan_usage_and_unique_day.sql`, `0004_fitness_hardening.sql`,
   `0005_scan_ledger_and_welcome_slot.sql`, `0006_macro_targets.sql`, `0007_habits.sql`,
-  `0008_measurements.sql`, `0009_foods.sql`, `0010_notifications.sql`, and
-  `0011_coach.sql` exist in source, apply cleanly locally, and are awaiting the remote window.
+  `0008_measurements.sql`, `0009_foods.sql`, `0010_notifications.sql`,
+  `0011_coach.sql`, and `0012_meal_plan_foods.sql` exist in source, apply cleanly
+  locally, and are awaiting the remote window.
 - `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 134/134.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 139/139.
 - New UX exists locally: photo or text estimate, editable description + re-estimate,
   clarification questions, ranges, quota, manual fallback, timezone confirmation, macro
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
   with quick-add chips plus a 7-day strip, weight/waist/hips/arms history, and a seeded
   food database with portion scaling, manual entry, AI food search options, and in-app
-  notifications with admin compose/schedule, a shared AI usage meter, and a grounded AI coach
-  with starter prompts, a clear-chat action, and a separate 20-message daily budget.
+  notifications with admin compose/schedule, a shared AI usage meter, a grounded AI coach
+  with starter prompts, a clear-chat action, and a separate 20-message daily budget, and a
+  seven-day vegetarian/non-vegetarian meal plan scaled to targets with a print/PDF view.
 
 ### Freellm (production)
 
@@ -138,7 +140,7 @@ admin UI shipped in the member bundle.
 | C-13 | PWA install page, offline shell, forced update | DONE | manifest + icons, `/install` page, offline app-shell cache, prompted service-worker updates |
 | C-14 | Streaks, badges, daily loops, leaderboard | DONE | keep; add plan-adherence streaks when schedules land |
 | C-15 | Macro targets + macro progress + editable entries + yesterday correction | DONE | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix |
-| C-16 | Indian food DB, manual search, portion scaling, brands | DONE | 62 seeded Indian/branded foods, search, portion scaling, manual nutrition entry |
+| C-16 | Indian food DB, manual search, portion scaling, brands | DONE | 66 seeded Indian/branded/high-protein foods, search, portion scaling, manual nutrition entry |
 | C-17 | AI food search returning options | DONE | option list with portions, quantity scaler, shares the scan quota |
 | C-18 | AI photo scan + recalculate | DONE | keep; explicit "not counted" on failure (**DONE**) |
 | C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | DONE | water/protein/sleep rollup, stretch quick-add, chips, 7-day strip |
@@ -148,7 +150,7 @@ admin UI shipped in the member bundle.
 | C-23 | Push + in-app popups + constant reminder banner + view counts | in-app DONE | in-app popups/banner, view tracking; VAPID push pending keys + dispatcher (**PARTIAL**) |
 | C-24 | Notification admin: compose, schedule, audience, test, cancel | DONE | admin console, scheduling, audience, test, cancel, view counts |
 | C-25 | Email lifecycle/campaigns/unsubscribe | none | welcome + weekly summary + unsubscribe; campaigns later (**P2**) |
-| C-26 | Meal-plan viewer/delivery (in-app/PDF/WhatsApp) | none | in-app plan + PDF export; WhatsApp handoff optional (**P1**) |
+| C-26 | Meal-plan viewer/delivery (in-app/PDF/WhatsApp) | DONE | `/meal-plan` seven-day veg/nonveg plan from seeded foods, portions scaled toward calorie/protein targets, protein top-up, honest gap note, browser print/save-as-PDF; WhatsApp handoff optional and not implemented |
 | C-27 | Consultation slots, booking, reminders (no payment) | none | slots/booking/confirmation; no checkout (**P2**) |
 | C-28 | Results/testimonials CMS + public result pages | none | public results + admin CRUD (**P3**) |
 | C-29 | Per-route SEO, sitemap, structured data, prerender | SPA shell | route meta, sitemap, JSON-LD, prerender public pages (**P2**) |
@@ -220,18 +222,20 @@ mandatory.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
    `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
    `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`,
-   `0009_foods.sql`, `0010_notifications.sql`, and `0011_coach.sql` remotely in a
-   short window.
+   `0009_foods.sql`, `0010_notifications.sql`, `0011_coach.sql`, and
+   `0012_meal_plan_foods.sql` remotely in a short window.
 4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns),
    `fitness_scan_usage`, `fitness_coach_usage`, `scan_data`, `fitness_scan_ledger`,
    `fitness_habits`, `fitness_measurements`, `fitness_foods`, `fitness_notifications`,
-   `fitness_notification_views`, macro columns on `fitness_logs`, partial
+   `fitness_notification_views`, four meal-plan food seeds (chicken breast, boiled egg,
+   tofu, soya chunks), macro columns on `fitness_logs`, partial
    `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
    7-day rollup, measurement history, food search/portion logging, coach reply and
-   clear, notification feed/admin, quota increments, 21st call 429, duplicate 409.
+   clear, meal plan for both diets with print preview, notification feed/admin, quota
+   increments, 21st call 429, duplicate 409.
 
 ### 3. Live acceptance
 
@@ -245,6 +249,7 @@ mandatory.
 - [ ] Food search finds seeds/brands; portion scaling and manual entry add nutrition.
 - [ ] AI food search returns options, scales the chosen portion, and spends one estimate.
 - [ ] Coach uses recent data, answers a starter prompt, clears, and spends one of 20.
+- [ ] Meal plan switches veg/nonveg, reflects targets, prints/saves a clean PDF.
 - [ ] Admin sends a banner/popup; member view and dismiss counts update.
 - [ ] Quota 20, then 429; failed upstream refunds.
 - [ ] Timezone confirmation re-dates once; no duplicate day/type.
@@ -255,9 +260,9 @@ mandatory.
 
 - Freellm: Pages rollback to `2e5e88d5` (source `3eba708`). Leave 0035.
 - Vision-only issue: clear `vision` from the upstream row; text stays up.
-- Fitness: Pages rollback to `850f076f`. Leave 0002-0011; old code ignores the ledger,
+- Fitness: Pages rollback to `850f076f`. Leave 0002-0012; old code ignores the ledger,
   macro columns, habits, measurements, foods, notification, and coach-usage tables and
-  still benefits from the welcome-row index exception.
+  still benefits from the welcome-row index exception; the extra food seeds are harmless.
 - Never restore D1 time travel for a single app; it rolls back all three.
 
 ---
@@ -278,6 +283,7 @@ mandatory.
 | Foods | Seeded search, brands, portion math, manual add, merge into day | verify |
 | AI food search | Option normalization, quota spend/refund, model prompt | verify |
 | AI coach | Grounded prompt, role validation, quota spend/refund/ceiling | verify |
+| Meal plan | 7 days, diet filtering, target scaling, top-up, totals, invalid diet | verify |
 | Notifications | Audience/schedule, view/dismiss, admin test/cancel | verify |
 | Ranges | `low ≤ calories ≤ high` after model output and manual edit | unit/verify |
 | Timezone | IST/UTC+14/UTC−11/DST boundaries; backfill once | verify |
@@ -470,9 +476,17 @@ The first release is done when:
   and refunds on upstream failure. Added `/coach` with starter prompts, clear-chat,
   accessible log semantics, and the shared usage meter, plus desktop/mobile navigation.
   Fitness **134/134 checks**, typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-26
-  meal plan; C-12 photo compare waits on private storage approval. Land
-  observability/cost guardrails alongside.
+- **2026-10-20 - weekly meal plan (C-26):** added `0012_meal_plan_foods.sql` with four
+  high-protein seeds, and a deterministic `GET /api/fitness/meal-plan` that builds seven
+  days of vegetarian or non-vegetarian Indian meals from the food DB. Portions are solved
+  toward the member's calorie target, a protein top-up (tofu or chicken breast) closes as
+  much of the protein gap as possible, and the response reports any remaining gap honestly
+  instead of claiming precision. Added `/meal-plan` with diet switching, per-day and
+  average totals, default-target guidance, print styles that hide app chrome, and
+  browser print/save-as-PDF. Fitness **139/139 checks**, typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-32
+  minimal admin and C-01 onboarding; C-12 photo compare waits on private storage approval.
+  Land observability/cost guardrails alongside.
 
 ## 12. Working agreement
 

@@ -5,6 +5,7 @@ import coachRoutes from '../routes/coach'
 import fitnessRoutes from '../routes/fitness'
 import foodRoutes from '../routes/foods'
 import habitRoutes from '../routes/habits'
+import mealPlanRoutes from '../routes/mealPlan'
 import measurementRoutes from '../routes/measurements'
 import notificationRoutes from '../routes/notifications'
 import profileRoutes from '../routes/profile'
@@ -51,6 +52,7 @@ app.route('/', coachRoutes)
 app.route('/', fitnessRoutes)
 app.route('/', foodRoutes)
 app.route('/', habitRoutes)
+app.route('/', mealPlanRoutes)
 app.route('/', measurementRoutes)
 app.route('/', notificationRoutes)
 app.route('/', profileRoutes)

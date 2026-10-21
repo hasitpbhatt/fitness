@@ -14,6 +14,7 @@ const navItems = [
   { to: '/coach', label: 'Coach' },
   { to: '/log', label: 'Log' },
   { to: '/foods', label: 'Foods' },
+  { to: '/meal-plan', label: 'Meal plan' },
   { to: '/measurements', label: 'Measurements' },
   { to: '/achievements', label: 'Achievements' },
   { to: '/leaderboard', label: 'Leaderboard' },

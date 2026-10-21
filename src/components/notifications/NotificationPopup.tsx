@@ -14,7 +14,7 @@ export function NotificationPopup() {
 
   return (
     <div
-      className="fixed bottom-20 right-4 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-4 shadow-2xl md:bottom-4"
+      className="no-print fixed bottom-20 right-4 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-line bg-surface p-4 shadow-2xl md:bottom-4"
       role="status"
       aria-live="polite"
     >
