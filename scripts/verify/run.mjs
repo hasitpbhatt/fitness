@@ -1352,6 +1352,7 @@ try {
           atLimit.body.remaining === 0 &&
           blocked.status === 429 &&
           blocked.body.error === 'rate_limited' &&
+          /all 20 AI estimates/i.test(blocked.body.message ?? '') &&
           upstreamCalls.length === callsBeforeLimit,
         JSON.stringify({ quota: atLimit.body, blocked: blocked.body }),
       )

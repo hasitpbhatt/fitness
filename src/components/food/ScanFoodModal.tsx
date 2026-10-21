@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../../lib/api'
+import {
+  AI_EXHAUSTED_MESSAGE,
+  AI_UNAVAILABLE_MESSAGE,
+  aiQuotaSummary,
+} from '../../lib/aiUsage'
 import { detectTimezone } from '../../lib/timezone'
 import { useModalFocus } from '../../lib/useModalFocus'
 import type { ScanItem, ScanQuota, ScanResult, ScanTotals } from '../../lib/types'
+import { AIUsageMeter } from '../ai/AIUsageMeter'
 import { Button, Input } from '../ui'
 
 type Props = {
@@ -27,12 +33,8 @@ const EMPTY_TOTALS: ScanTotals = {
 
 function friendlyError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
-    if (err.status === 429) {
-      return "You've used all your AI estimates for today. Log this meal manually or try again tomorrow."
-    }
-    if (err.status === 503) {
-      return 'AI estimates are temporarily unavailable. You can log this meal manually.'
-    }
+    if (err.status === 429) return AI_EXHAUSTED_MESSAGE
+    if (err.status === 503) return AI_UNAVAILABLE_MESSAGE
     if (err.code === 'invalid_model_output') {
       return "The AI couldn't read that estimate. Try another photo or add a little more detail."
     }
@@ -154,12 +156,12 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
     if (!file) return
     if (atLimit) {
       setPhase('error')
-      setError("You've used all your AI estimates for today. Log this meal manually or try again tomorrow.")
+      setError(AI_EXHAUSTED_MESSAGE)
       return
     }
     if (aiUnavailable) {
       setPhase('error')
-      setError('AI estimates are temporarily unavailable. You can log this meal manually.')
+      setError(AI_UNAVAILABLE_MESSAGE)
       return
     }
     if (!file.type.startsWith('image/')) {
@@ -193,12 +195,12 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
     if (text.length < 2 || busy) return
     if (atLimit) {
       setPhase('error')
-      setError("You've used all your AI estimates for today. Log this meal manually or try again tomorrow.")
+      setError(AI_EXHAUSTED_MESSAGE)
       return
     }
     if (aiUnavailable) {
       setPhase('error')
-      setError('AI estimates are temporarily unavailable. You can log this meal manually.')
+      setError(AI_UNAVAILABLE_MESSAGE)
       return
     }
     setError(null)
@@ -339,16 +341,10 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
                   Snap your plate and we&apos;ll identify the food. You can fix the description and portions before
                   saving.
                 </p>
-                {quota && (
-                  <p className={`text-[11px] ${atLimit ? 'text-warn' : 'text-muted'}`}>
-                    {atLimit
-                      ? `You've used all ${quota.limit} AI estimates for today.`
-                      : `${quota.limit - quota.used} of ${quota.limit} AI estimates left today.`}
-                  </p>
-                )}
+                <AIUsageMeter quota={quota} configured={configured} className="w-full max-w-xs text-left" />
                 {aiUnavailable && (
-                  <p className="text-[11px] text-warn">
-                    AI estimates are temporarily off. You can still log this meal manually.
+                  <p className="max-w-xs text-[11px] text-warn">
+                    Manual food logging is still available.
                   </p>
                 )}
                 <input
@@ -561,7 +557,7 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
 
               <p className="text-[11px] text-muted">
                 AI estimate — can be off by 20% or more. Check portions before saving.
-                {quota ? ` ${quota.used} of ${quota.limit} AI estimates used today.` : ''}
+                {quota ? ` ${aiQuotaSummary(quota)}` : ''}
               </p>
             </div>
           )}

@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
+import { AI_EXHAUSTED_MESSAGE, aiExhausted } from '../lib/aiUsage'
 import { useAuth } from '../lib/auth'
+import { AIUsageMeter } from '../components/ai/AIUsageMeter'
 import { Button, Card, Input } from '../components/ui'
-import type { Food, FoodOption } from '../lib/types'
+import type { Food, FoodOption, ScanQuota } from '../lib/types'
 
 type ManualForm = {
   name: string
@@ -59,6 +61,8 @@ export default function Foods() {
   const [searching, setSearching] = useState(false)
   const [aiSearching, setAiSearching] = useState(false)
   const [source, setSource] = useState<'db' | 'ai'>('db')
+  const [quota, setQuota] = useState<ScanQuota | null>(null)
+  const [configured, setConfigured] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -71,6 +75,23 @@ export default function Foods() {
       })
       .catch(() => {
         if (active) setError('Could not load foods.')
+      })
+    return () => {
+      active = false
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    let active = true
+    api.get<{ quota: ScanQuota; configured: boolean }>('/fitness/scan/quota')
+      .then((result) => {
+        if (!active) return
+        setQuota(result.quota)
+        setConfigured(result.configured)
+      })
+      .catch(() => {
+        // The meter is advisory; the search endpoint remains authoritative.
       })
     return () => {
       active = false
@@ -128,16 +149,21 @@ export default function Foods() {
       }>('/fitness/scan/suggest', { query: searchQuery })
       setResults(result.options.map(optionToFood))
       setSelected(null)
+      setQuota(result.quota ?? null)
       setSource('ai')
       setMessage(
         result.options.length === 0
           ? 'No AI matches. Try a different search or add it manually.'
-          : `AI found ${result.options.length} options${
-              result.quota ? ` · ${result.quota.used}/${result.quota.limit} estimates used today` : ''
-            }.`,
+          : `AI found ${result.options.length} options.`
       )
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not search with AI.')
+      setError(
+        err instanceof ApiError && err.status === 429
+          ? AI_EXHAUSTED_MESSAGE
+          : err instanceof ApiError
+            ? err.message
+            : 'Could not search with AI.',
+      )
     } finally {
       setAiSearching(false)
     }
@@ -233,6 +259,8 @@ export default function Foods() {
         </div>
       )}
 
+      <AIUsageMeter quota={quota} configured={configured} />
+
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <form onSubmit={(event) => void search(event)} className="flex flex-wrap gap-2 border-b border-line px-4 py-3">
@@ -248,14 +276,12 @@ export default function Foods() {
               type="button"
               variant="secondary"
               loading={aiSearching}
+              disabled={aiExhausted(quota) || configured === false}
               onClick={() => void aiSearch()}
             >
               AI search
             </Button>
           </form>
-          <p className="border-b border-line px-4 py-2 text-[11px] text-muted">
-            AI search shares your daily meal-estimate quota.
-          </p>
           {source === 'ai' && results && results.length > 0 && (
             <p className="border-b border-line bg-surface-2 px-4 py-2 text-[11px] text-muted">
               AI estimates · choose an option, then adjust the portion.

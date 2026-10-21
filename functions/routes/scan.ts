@@ -27,6 +27,7 @@ const MAX_IMAGE_CHARS = 10_000_000 // ~7.5 MB binary once base64 is decoded
 const MAX_ITEMS = 20
 const MAX_QUESTIONS = 5
 const SCANS_PER_DAY = 20
+const QUOTA_EXHAUSTED_MESSAGE = `You've used all ${SCANS_PER_DAY} AI estimates for today - try again tomorrow.`
 const MAX_SCANS_STORED = 30
 const UPSTREAM_TIMEOUT_MS = 60_000
 const DEFAULT_BASE_URL = 'https://freellm.hasit.in/v1'
@@ -429,7 +430,7 @@ app.post('/api/fitness/scan', async (c) => {
     return c.json(
       {
         error: 'rate_limited',
-        message: `You've used all ${SCANS_PER_DAY} AI meal estimates for today — try again tomorrow.`,
+        message: QUOTA_EXHAUSTED_MESSAGE,
         quota,
       },
       429,
@@ -493,7 +494,7 @@ app.post('/api/fitness/scan/text', async (c) => {
     return c.json(
       {
         error: 'rate_limited',
-        message: `You've used all ${SCANS_PER_DAY} AI meal estimates for today — try again tomorrow.`,
+        message: QUOTA_EXHAUSTED_MESSAGE,
         quota,
       },
       429,
@@ -551,7 +552,7 @@ app.post('/api/fitness/scan/suggest', async (c) => {
     return c.json(
       {
         error: 'rate_limited',
-        message: `You've used all ${SCANS_PER_DAY} AI meal estimates for today - try again tomorrow.`,
+        message: QUOTA_EXHAUSTED_MESSAGE,
         quota,
       },
       429,
@@ -623,7 +624,7 @@ app.post('/api/fitness/scan/refine', async (c) => {
     return c.json(
       {
         error: 'rate_limited',
-        message: `You've used all ${SCANS_PER_DAY} AI meal estimates for today — try again tomorrow.`,
+        message: QUOTA_EXHAUSTED_MESSAGE,
         quota,
       },
       429,

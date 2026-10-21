@@ -58,7 +58,7 @@ back to these.
   targets/bars, editable/removable entries, yesterday logging/correction, a habit tracker
   with quick-add chips plus a 7-day strip, weight/waist/hips/arms history, and a seeded
   food database with portion scaling, manual entry, AI food search options, and in-app
-  notifications with admin compose/schedule.
+  notifications with admin compose/schedule, and a shared AI usage meter.
 
 ### Freellm (production)
 
@@ -143,7 +143,7 @@ admin UI shipped in the member bundle.
 | C-19 | Habit tracker: water/protein/sleep/stretch, quick-add chips, 7-day strip | DONE | water/protein/sleep rollup, stretch quick-add, chips, 7-day strip |
 | C-20 | Human food-photo review queue / community-approved DB | none | pending/approve/merge queue (**P3**) |
 | C-21 | AI coach chat grounded in plan/progress, 20/day, clear | none | grounded chat, daily quota, clear, starter prompts (**P1**) |
-| C-22 | AI usage meters + friendly exhaustion copy | scan quota DONE | extend meters to search/coach; shared copy (**P1**) |
+| C-22 | AI usage meters + friendly exhaustion copy | PARTIAL | shared meter/copy on scan + food search; coach meter arrives with C-21 (**PARTIAL**) |
 | C-23 | Push + in-app popups + constant reminder banner + view counts | in-app DONE | in-app popups/banner, view tracking; VAPID push pending keys + dispatcher (**PARTIAL**) |
 | C-24 | Notification admin: compose, schedule, audience, test, cancel | DONE | admin console, scheduling, audience, test, cancel, view counts |
 | C-25 | Email lifecycle/campaigns/unsubscribe | none | welcome + weekly summary + unsubscribe; campaigns later (**P2**) |
@@ -454,8 +454,13 @@ The first release is done when:
   test copies, send-now/cancel, and per-notification view/dismiss counts. Push delivery
   remains deferred until VAPID keys and a dispatcher exist. Fitness **124/124 checks**,
   typecheck, lint, build pass.
-- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-22
-  usage meters, then C-21 coach; C-12 photo compare waits on private storage approval.
+- **2026-10-20 - shared AI usage meter (C-22 partial):** added `src/lib/aiUsage.ts` for
+  the exhaustion/unavailable/shared-quota copy and `AIUsageMeter` for a consistent
+  usage bar. The scan modal and `/foods` AI search now share that meter, disable AI
+  actions when exhausted or unconfigured, and the API quota message is centralized.
+  The coach meter lands with C-21. Fitness **124/124 checks**, typecheck, lint, build pass.
+- **Next:** deploy remains pending explicit approval. Parity Wave 1 continues with C-21
+  coach and its shared meter; C-12 photo compare waits on private storage approval.
   Land observability/cost guardrails alongside.
 
 ## 12. Working agreement
