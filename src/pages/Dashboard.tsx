@@ -7,6 +7,7 @@ import { useEntitlement } from '../lib/useEntitlement'
 import { Button, Card } from '../components/ui'
 import { Icon } from '../components/icons'
 import { useToast } from '../lib/useToast'
+import { useLocale } from '../i18n'
 import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { TimezoneModal } from '../components/food/TimezoneModal'
 import { MacroBars } from '../components/nutrition/MacroBars'
@@ -78,6 +79,7 @@ export default function Dashboard() {
   const { user, loading } = useAuth()
   const entitlement = useEntitlement(user?.id)
   const { showToast } = useToast()
+  const { t } = useLocale()
   const [logs, setLogs] = useState<FitnessLog[] | null>(null)
   const [streak, setStreak] = useState<Streak | null>(null)
   const [badges, setBadges] = useState<Badge[] | null>(null)
@@ -257,17 +259,17 @@ export default function Dashboard() {
             </button>
             <h1 className="mt-1 text-xl font-semibold">
               {atRisk
-                ? 'Your streak is at risk'
+                ? t('dash.streakAtRisk')
                 : loggedToday
-                  ? `Nice work, ${user.username}`
-                  : 'Ready when you are'}
+                  ? t('dash.niceWork', { name: user.username })
+                  : t('dash.readyWhen')}
             </h1>
             <p className="mt-1 max-w-md text-[13px] text-muted">
               {atRisk
-                ? `Log an activity today to keep your ${currentStreak}-day streak alive.`
+                ? t('dash.streakAtRiskBody', { count: currentStreak })
                 : loggedToday
-                  ? "You've logged today. Keep the momentum going."
-                  : 'Log your first activity of the day to start a streak.'}
+                  ? t('dash.niceWorkBody')
+                  : t('dash.readyWhenBody')}
             </p>
 
             <div
@@ -278,7 +280,7 @@ export default function Dashboard() {
               }`}
             >
               <span aria-hidden="true">{loggedToday ? '✓' : '○'}</span>
-              Daily quest: log at least one activity
+              {t('dash.dailyQuest')}
             </div>
 
             {/* The two things a member actually does live here, so they get
@@ -287,7 +289,7 @@ export default function Dashboard() {
               <Link to="/log" className="block w-full sm:w-auto">
                 <Button size="lg" className="w-full sm:w-auto">
                   <Icon name="plus-circle" size={18} />
-                  Log activity
+                  {t('dash.logActivity')}
                 </Button>
               </Link>
               <Button
@@ -303,13 +305,13 @@ export default function Dashboard() {
                 }}
               >
                 <Icon name="camera" size={18} />
-                Scan food
+                {t('dash.scanFood')}
               </Button>
               <Link
                 to="/achievements"
                 className="tap flex items-center justify-center text-[13px] text-muted transition-colors hover:text-content sm:justify-start"
               >
-                View badges
+                {t('dash.viewBadges')}
                 <Icon name="chevron-right" size={15} />
               </Link>
             </div>
@@ -343,7 +345,9 @@ export default function Dashboard() {
       {profile && !profile.confirmed && profile.timezone && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
           <div>
-            <p className="text-[13px] font-medium">Is {profile.timezone} your timezone?</p>
+              <p className="text-[13px] font-medium">
+                {t('dash.timezoneQuestion', { zone: profile.timezone })}
+              </p>
             <p className="text-[12px] text-muted">
               Detected from this device. Logs, streaks, and weekly totals roll over at midnight there.
             </p>
@@ -353,8 +357,8 @@ export default function Dashboard() {
               Change
             </Button>
             <Button size="sm" onClick={() => void confirmDetectedTimezone()} loading={savingTimezone}>
-              Yes, use it
-            </Button>
+                {t('dash.yesUseThis')}
+              </Button>
           </div>
         </div>
       )}
@@ -365,7 +369,7 @@ export default function Dashboard() {
         <Card className="p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <div>
-              <p className="text-[12px] uppercase tracking-wide text-muted">Your focus</p>
+              <p className="text-[12px] uppercase tracking-wide text-muted">{t('dash.yourFocus')}</p>
               <p className="mt-0.5 text-[15px] font-semibold text-content">
                 {GOAL_LABELS[focusGoal.type] ?? 'Your focus'}
               </p>
@@ -424,28 +428,28 @@ export default function Dashboard() {
           <p className="text-[12px] uppercase tracking-wide text-muted">Today&apos;s logs</p>
           <p className="num mt-1 text-2xl font-semibold">{todayLogs.length}</p>
           <p className="text-[12px] text-muted">
-            {todayLogs.length === 1 ? 'entry logged' : 'entries logged'} today
+            {todayLogs.length === 1 ? t('dash.entryLogged') : t('dash.entriesLogged')}
           </p>
         </Card>
 
         <Card className="p-4">
-          <p className="text-[12px] uppercase tracking-wide text-muted">Badges unlocked</p>
+          <p className="text-[12px] uppercase tracking-wide text-muted">{t('dash.badgesUnlocked')}</p>
           <p className="num mt-1 text-2xl font-semibold">
             {unlockedCount}
             <span className="text-[13px] font-normal text-muted">/{TOTAL_BADGES}</span>
           </p>
           <Link to="/achievements" className="text-[12px] text-accent hover:underline">
-            See achievements →
+            {t('dash.seeAchievements')} →
           </Link>
         </Card>
 
         <Card className="p-4">
-          <p className="text-[12px] uppercase tracking-wide text-muted">Longest streak</p>
+          <p className="text-[12px] uppercase tracking-wide text-muted">{t('dash.longestStreak')}</p>
           <p className="num mt-1 text-2xl font-semibold">
             {longestStreak}
             <span className="text-[13px] font-normal text-muted"> days</span>
           </p>
-          <p className="text-[12px] text-muted">Personal best</p>
+          <p className="text-[12px] text-muted">{t('dash.personalBest')}</p>
         </Card>
       </div>
 
@@ -458,9 +462,9 @@ export default function Dashboard() {
           <div className="flex flex-col gap-2 px-4 pb-4">
             {loadError ? (
               <div className="py-6 text-center">
-                <p className="text-[13px] text-muted">Failed to load your logs.</p>
+                <p className="text-[13px] text-muted">{t('dash.loadFailed')}</p>
                 <Button variant="secondary" className="mt-3" onClick={() => void loadData()}>
-                  Try again
+                  {t('dash.tryAgain')}
                 </Button>
               </div>
             ) : (
@@ -472,10 +476,8 @@ export default function Dashboard() {
         ) : todayLogs.length === 0 ? (
           <div className="p-8 text-center">
             <p className="text-3xl" aria-hidden="true">🎯</p>
-            <p className="mt-2 text-[13px] text-muted">
-              Nothing logged today yet — your streak starts with one entry.
-            </p>
-            <Link to="/log" className="btn-primary mt-4">Log your first activity</Link>
+            <p className="mt-2 text-[13px] text-muted">{t('dash.emptyBody')}</p>
+            <Link to="/log" className="btn-primary mt-4">{t('dash.logFirst')}</Link>
           </div>
         ) : (
           <div className="flex flex-col divide-y divide-line">

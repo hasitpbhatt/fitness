@@ -362,7 +362,7 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
                   ref={galleryRef}
                   type="file"
                   accept="image/*"
-                  className="hidden"
+                  className="hidden md:block"
                   onChange={(event) => void onFile(event)}
                 />
                 <Button
