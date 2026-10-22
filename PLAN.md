@@ -58,7 +58,7 @@ back to these.
   `FITNESS_DATA_KEY` (optional) encrypts those tokens at rest; `GOOGLE_CLIENT_SECRET`
   is the fallback passphrase.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 181/181.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 189/189.
 - New UX exists locally: first-run goal + timezone onboarding, photo or text estimate,
   editable description + re-estimate, clarification questions, ranges, quota, manual
   fallback, timezone confirmation, macro
@@ -559,6 +559,30 @@ The first release is done when:
   `out_of_credits` message instead of a generic failure, and the quota is refunded.
   Added `0016_freellm_user_key.sql` plus `GET/PUT/DELETE /api/fitness/freellm-key`.
   Fitness **181/181 checks**, typecheck, lint, build pass.
+- **2026-10-22 - personalization learned from coach chats (C-37 add-on):** added
+  `0017_preferences.sql` (`fitness_preferences` + `fitness_preference_updates`) and
+  `functions/lib/preferences.ts`. The coach conversation still never leaves the
+  browser; only the distilled result is stored: diets, allergens, foods to avoid,
+  foods the member likes, and a short note. `POST /api/fitness/preferences/extract`
+  is called by the client after a coach reply and only spends an AI call when the
+  member's message actually carries a diet or allergy signal - ordinary coaching
+  costs nothing extra. The stored set is injected into every scan, text estimate,
+  food search, refine, and coach prompt, so a member is never asked the same
+  question twice. `GET/PUT/DELETE /api/fitness/preferences` lets the member
+  correct or forget what the coach learned; the coach page shows the set as tags
+  with an edit panel. Closed vocabulary for diets and allergens, open for
+  avoid/likes, everything length-capped and stripped of control characters before
+  it can reach a prompt.
+- **2026-10-22 - scan failure root cause + camera fix:** a photo scan returned
+  `upstream_error` (502) while freellm had recorded the request as *completed*.
+  Root cause: fitness asked for `max_tokens: 1200`, the model's JSON needs ~2,400
+  tokens for a real meal, so the upstream stopped at the cap and returned an
+  **empty body** - fitness surfaced a generic 502 and the member was still
+  charged 2,139 credits. Fixed by raising the scan budgets (image/text/refine
+  1200 -> 3000, suggest 900 -> 1600) and by making freellm settle an empty
+  completion as `failed` (zero charge) in both the non-streaming and streaming
+  paths. Also split the scan photo picker into **Take a photo** (`capture="environment"`,
+  opens the camera directly on mobile) and **Choose from photos**.
 - **Next:** deploy remains pending explicit approval. Wave 1's planned baseline batch is
   implemented; remaining partial is C-02 scheduler-based auto-expiry (deferred — lazy
   expiry already handles functional requirement). C-12 weekly photo comparison is

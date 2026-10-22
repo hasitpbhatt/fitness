@@ -18,6 +18,7 @@ import { trackEvent } from '../lib/analytics'
 import { newId } from '../lib/crypto'
 import { canUseAITools } from '../lib/entitlements'
 import { resolveFreellmKey } from '../lib/freellmKey'
+import { getPreferences, preferencesPromptBlock } from '../lib/preferences'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
 import { getSession } from '../lib/session'
 import { updateStreaks } from '../lib/streaks'
@@ -46,6 +47,29 @@ const DEFAULT_TEXT_MODEL = 'nemotron-3-ultra-550b-a55b'
 const IMAGE_DATA_URI = /^data:image\/(?:jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/
 const DESCRIPTION_FALLBACK_LOW = 0.8
 const DESCRIPTION_FALLBACK_HIGH = 1.2
+
+// Output budget for the JSON estimate. The schema is long: one item costs
+// roughly 90 tokens, so a six-item meal needs well over 2,000 tokens. A small
+// budget makes the model stop mid-JSON, and the upstream then returns an empty
+// body - the member gets a failure and is still charged. Keep headroom.
+const SCAN_MAX_TOKENS = 3000
+const TEXT_SCAN_MAX_TOKENS = 3000
+const REFINE_MAX_TOKENS = 3000
+const SUGGEST_MAX_TOKENS = 1600
+
+/**
+ * Appends what the coach already learned about the member's diet. The model
+ * then accounts for it instead of asking again on every scan.
+ */
+async function scanSystemPrompt(
+  env: Bindings,
+  userId: string,
+  base: string,
+): Promise<string> {
+  const prefs = await getPreferences(env, userId)
+  const block = preferencesPromptBlock(prefs)
+  return block ? `${base}\n\n${block}` : base
+}
 
 const SCHEMA_PROMPT = `You are a nutrition estimation assistant. Return ONLY valid JSON with no markdown and no explanations, matching this schema exactly:
 {"description":string,"items":[{"name":string,"qty":number,"unit":string,"calories":number,"calories_low":number,"calories_high":number,"protein_g":number,"fat_g":number,"carbs_g":number,"confidence":number}],"totals":{"calories":number,"calories_low":number,"calories_high":number,"protein_g":number,"fat_g":number,"carbs_g":number},"needs_clarification":boolean,"questions":[{"item_name":string,"question":string}]}
@@ -341,7 +365,14 @@ async function callFreellm(
       | null
     const content = data?.choices?.[0]?.message?.content
     if (typeof content !== 'string' || !content.trim()) {
-      return { ok: false, status: 502, message: 'The model returned an empty answer. Try again.' }
+      // The upstream answered but the body was empty. That is a transient
+      // upstream fault, not a member error - it is worth one retry.
+      return {
+        ok: false,
+        status: 502,
+        code: 'empty_upstream_answer',
+        message: 'The estimate came back empty. Please try that photo again.',
+      }
     }
     const usage = data?.usage
     return {
@@ -477,7 +508,7 @@ app.post('/api/fitness/scan', async (c) => {
   const scanId = newId()
   const model = c.env.FREELLM_VL_MODEL ?? DEFAULT_VL_MODEL
   const messages = [
-    { role: 'system', content: SCHEMA_PROMPT },
+    { role: 'system', content: await scanSystemPrompt(c.env, session.userId, SCHEMA_PROMPT) },
     {
       role: 'user',
       content: [
@@ -490,7 +521,7 @@ app.post('/api/fitness/scan', async (c) => {
     },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 1200, memberKey)
+  const upstream = await callFreellm(c.env, model, messages, SCAN_MAX_TOKENS, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
     return c.json(
@@ -549,14 +580,17 @@ app.post('/api/fitness/scan/text', async (c) => {
   const scanId = newId()
   const model = c.env.FREELLM_TEXT_MODEL ?? DEFAULT_TEXT_MODEL
   const messages = [
-    { role: 'system', content: `${SCHEMA_PROMPT}\n${TEXT_ONLY_RULES}` },
+    {
+      role: 'system',
+      content: await scanSystemPrompt(c.env, session.userId, `${SCHEMA_PROMPT}\n${TEXT_ONLY_RULES}`),
+    },
     {
       role: 'user',
       content: `Meal description: ${description}\n\nIdentify the ingredients and dishes, estimate typical portions, and ask the user to fill in the missing quantities. Return the full JSON.`,
     },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 1200, memberKey)
+  const upstream = await callFreellm(c.env, model, messages, TEXT_SCAN_MAX_TOKENS, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
     return c.json(
@@ -614,11 +648,11 @@ app.post('/api/fitness/scan/suggest', async (c) => {
 
   const model = c.env.FREELLM_TEXT_MODEL ?? DEFAULT_TEXT_MODEL
   const messages = [
-    { role: 'system', content: FOOD_OPTIONS_PROMPT },
+    { role: 'system', content: await scanSystemPrompt(c.env, session.userId, FOOD_OPTIONS_PROMPT) },
     { role: 'user', content: `Food query: ${query}\n\nReturn 3-5 options with a typical portion and its nutrition.` },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 900, memberKey)
+  const upstream = await callFreellm(c.env, model, messages, SUGGEST_MAX_TOKENS, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
     return c.json(
@@ -704,11 +738,11 @@ app.post('/api/fitness/scan/refine', async (c) => {
   ].join('')
 
   const messages = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: await scanSystemPrompt(c.env, session.userId, systemPrompt) },
     { role: 'user', content: userPrompt },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 1200, memberKey)
+  const upstream = await callFreellm(c.env, model, messages, REFINE_MAX_TOKENS, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
     return c.json(

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AIUsageMeter } from '../components/ai/AIUsageMeter'
+import { PreferencesPanel } from '../components/PreferencesPanel'
 import { Button, Card, Textarea } from '../components/ui'
 import { AI_COACH_LIMIT, COACH_EXHAUSTED_MESSAGE, COACH_OUT_OF_CREDITS_MESSAGE, COACH_QUOTA_NOTE, COACH_UNAVAILABLE_MESSAGE, aiExhausted } from '../lib/aiUsage'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useEntitlement } from '../lib/useEntitlement'
-import type { CoachMessage, ScanQuota } from '../lib/types'
+import type { CoachMessage, Preferences, ScanQuota } from '../lib/types'
 
 const STARTERS = [
   'What should I eat to hit my protein target today?',
@@ -24,6 +25,7 @@ export default function Coach() {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [preferences, setPreferences] = useState<Preferences | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -38,6 +40,14 @@ export default function Coach() {
       })
       .catch(() => {
         // The meter is advisory; the chat endpoint remains authoritative.
+      })
+    api.get<{ preferences: Preferences | null }>('/fitness/preferences')
+      .then((result) => {
+        if (!active) return
+        setPreferences(result.preferences)
+      })
+      .catch(() => {
+        // Personalization is optional; the coach works without it.
       })
     return () => {
       active = false
@@ -106,6 +116,20 @@ export default function Coach() {
       })
       setMessages([...outgoing, { role: 'assistant', content: result.reply }])
       setQuota(result.quota)
+      // The coach may have learned a new preference from this exchange. Ask the
+      // server to distil it - it only spends an AI call when the message
+      // actually carried a diet or allergy.
+      const transcript = [...outgoing, { role: 'assistant', content: result.reply }]
+      void api
+        .post<{ updated: boolean; preferences: Preferences | null }>('/fitness/preferences/extract', {
+          messages: transcript,
+        })
+        .then((extracted) => {
+          if (extracted.updated) setPreferences(extracted.preferences)
+        })
+        .catch(() => {
+          // Learning is best-effort; never block the conversation on it.
+        })
     } catch (err) {
       setMessages(previous)
       setInput(trimmed)
@@ -151,6 +175,8 @@ export default function Coach() {
         exhaustedMessage={COACH_EXHAUSTED_MESSAGE}
         unavailableMessage={COACH_UNAVAILABLE_MESSAGE}
       />
+
+      <PreferencesPanel preferences={preferences} onChange={setPreferences} />
 
       {error && (
         <div className="rounded-lg border border-loss/30 bg-loss/5 px-3 py-2 text-[12px] text-loss" role="alert">

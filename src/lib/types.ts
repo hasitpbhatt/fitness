@@ -254,3 +254,13 @@ export type ScanResult = {
   model: string
   quota?: ScanQuota
 }
+
+export type Preferences = {
+  diets: string[]
+  allergens: string[]
+  avoid: string[]
+  likes: string[]
+  notes: string
+  source: string
+  updated_at: number
+}

@@ -7,6 +7,7 @@ import { Hono } from 'hono'
 import { trackEvent } from '../lib/analytics'
 import { canUseAITools } from '../lib/entitlements'
 import { resolveFreellmKey } from '../lib/freellmKey'
+import { getPreferences, preferencesPromptBlock } from '../lib/preferences'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
 import { getSession } from '../lib/session'
 import { addDays, localDate, quotaDay } from '../lib/time'
@@ -138,7 +139,7 @@ async function refundCoachQuota(env: Bindings, userId: string, date: string): Pr
 
 async function loadContext(env: Bindings, userId: string, today: string, timezone: string) {
   const weekStartDate = addDays(today, -6)
-  const [profile, goals, streak, days, measurements, todayLogs] = await Promise.all([
+  const [profile, goals, streak, days, measurements, todayLogs, preferences] = await Promise.all([
     env.DB.prepare(
       `SELECT calorie_target, protein_target_g, carbs_target_g, fat_target_g
        FROM fitness_profiles WHERE user_id = ?`,
@@ -198,6 +199,7 @@ async function loadContext(env: Bindings, userId: string, today: string, timezon
     )
       .bind(userId, today)
       .all(),
+    getPreferences(env, userId),
   ])
 
   return {
@@ -206,6 +208,7 @@ async function loadContext(env: Bindings, userId: string, today: string, timezon
     targets: profile ?? null,
     goals: goals.results,
     streak: streak ?? null,
+    preferences: preferences ?? null,
     last_7_days: days.results.map((day) => ({
       date: day.date,
       workout_min: numberOrZero(day.workout_min),
@@ -367,10 +370,16 @@ app.post('/api/fitness/coach', async (c) => {
       500,
     )
   }
-  const messages = [
-    { role: 'system', content: `${COACH_SYSTEM_PROMPT}\n\nMEMBER DATA:\n${JSON.stringify(context)}` },
-    ...history,
+  const { preferences, ...memberData } = context
+  const preferenceBlock = preferencesPromptBlock(preferences)
+  const systemContent = [
+    COACH_SYSTEM_PROMPT,
+    `MEMBER DATA:\n${JSON.stringify(memberData)}`,
+    preferenceBlock,
   ]
+    .filter(Boolean)
+    .join('\n\n')
+  const messages = [{ role: 'system', content: systemContent }, ...history]
 
   const result = await callCoach(c.env, messages, memberKey)
   if (!result.ok) {

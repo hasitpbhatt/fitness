@@ -11,6 +11,7 @@ import habitRoutes from '../../functions/routes/habits'
 import mealPlanRoutes from '../../functions/routes/mealPlan'
 import measurementRoutes from '../../functions/routes/measurements'
 import notificationRoutes from '../../functions/routes/notifications'
+import preferenceRoutes from '../../functions/routes/preferences'
 import profileRoutes from '../../functions/routes/profile'
 import scanRoutes from '../../functions/routes/scan'
 import type { Bindings } from '../../functions/lib/types'
@@ -40,6 +41,7 @@ app.route('/', habitRoutes)
 app.route('/', mealPlanRoutes)
 app.route('/', measurementRoutes)
 app.route('/', notificationRoutes)
+app.route('/', preferenceRoutes)
 app.route('/', profileRoutes)
 app.route('/', scanRoutes)
 

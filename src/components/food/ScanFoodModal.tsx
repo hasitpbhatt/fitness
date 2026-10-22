@@ -81,6 +81,7 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
   const [configured, setConfigured] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const galleryRef = useRef<HTMLInputElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
@@ -353,6 +354,14 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
                   ref={inputRef}
                   type="file"
                   accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(event) => void onFile(event)}
+                />
+                <input
+                  ref={galleryRef}
+                  type="file"
+                  accept="image/*"
                   className="hidden"
                   onChange={(event) => void onFile(event)}
                 />
@@ -360,7 +369,14 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
                   onClick={() => inputRef.current?.click()}
                   disabled={atLimit || aiUnavailable}
                 >
-                  Take or upload a photo
+                  Take a photo
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => galleryRef.current?.click()}
+                  disabled={atLimit || aiUnavailable}
+                >
+                  Choose from photos
                 </Button>
                 <p className="max-w-xs text-[11px] text-muted">
                   The photo isn&apos;t stored. It&apos;s sent to the AI provider once for this estimate.

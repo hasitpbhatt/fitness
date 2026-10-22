@@ -1653,6 +1653,11 @@ try {
           Array.isArray(photoCall?.body?.messages?.[1]?.content),
         JSON.stringify({ url: photoCall?.url, model: photoCall?.body?.model, auth: photoCall?.authorization }),
       )
+      check(
+        'the scan asks for enough output tokens to fit a full meal',
+        typeof photoCall?.body?.max_tokens === 'number' && photoCall.body.max_tokens >= 3000,
+        JSON.stringify({ max_tokens: photoCall?.body?.max_tokens }),
+      )
 
       scenarios.push({
         body: completion({
@@ -1814,6 +1819,135 @@ try {
         'undo deletes a scan-only meal after the round trip',
         undone.status === 200 && undone.body.deleted === true && undone.body.scan_count === 0,
         JSON.stringify(undone.body),
+      )
+
+      // ------------------------------------------------ personalization
+      const emptyPrefs = await json(await callScan('/api/fitness/preferences', { headers: scanHeaders }))
+      check(
+        'preferences start empty',
+        emptyPrefs.status === 200 && emptyPrefs.body.preferences === null,
+        JSON.stringify(emptyPrefs.body),
+      )
+
+      const callsBeforeExtract = upstreamCalls.length
+      const noSignal = await json(
+        await callScan('/api/fitness/preferences/extract', {
+          method: 'POST',
+          headers: scanHeaders,
+          body: JSON.stringify({ messages: [{ role: 'user', content: 'How is my week going?' }] }),
+        }),
+      )
+      check(
+        'a chat without food preferences spends no extra AI call',
+        noSignal.status === 200 &&
+          noSignal.body.updated === false &&
+          noSignal.body.reason === 'no_preference_detected' &&
+          upstreamCalls.length === callsBeforeExtract,
+        JSON.stringify({ body: noSignal.body, calls: upstreamCalls.length - callsBeforeExtract }),
+      )
+
+      scenarios.push({
+        body: completion({
+          diets: ['vegetarian'],
+          allergens: ['gluten'],
+          avoid: ['mushrooms'],
+          likes: ['paneer'],
+          notes: 'prefers home cooking',
+        }),
+      })
+      const learned = await json(
+        await callScan('/api/fitness/preferences/extract', {
+          method: 'POST',
+          headers: scanHeaders,
+          body: JSON.stringify({
+            messages: [
+              { role: 'user', content: 'I am vegetarian and I cannot eat gluten' },
+              { role: 'assistant', content: 'Got it, I will keep that in mind.' },
+            ],
+          }),
+        }),
+      )
+      check(
+        'a coach chat teaches the app a diet and an allergy',
+        learned.status === 200 &&
+          learned.body.updated === true &&
+          learned.body.preferences?.diets?.includes('vegetarian') &&
+          learned.body.preferences?.allergens?.includes('gluten') &&
+          learned.body.preferences?.avoid?.includes('mushrooms') &&
+          learned.body.preferences?.source === 'coach',
+        JSON.stringify(learned.body),
+      )
+
+      const storedRow = await scanDb
+        .prepare("SELECT diets, allergens, source FROM fitness_preferences WHERE user_id = 'u-scan'")
+        .first()
+      check(
+        'the learned preference is persisted for the member',
+        storedRow !== null &&
+          JSON.parse(storedRow.diets).includes('vegetarian') &&
+          JSON.parse(storedRow.allergens).includes('gluten') &&
+          storedRow.source === 'coach',
+        JSON.stringify(storedRow),
+      )
+
+      scenarios.push({
+        body: completion({
+          description: 'Paneer tikka',
+          items: [item('Paneer', 220)],
+          needs_clarification: false,
+          questions: [],
+        }),
+      })
+      const personalised = await json(
+        await callScan('/api/fitness/scan', {
+          method: 'POST',
+          headers: scanHeaders,
+          body: JSON.stringify({ image: 'data:image/jpeg;base64,AAAA' }),
+        }),
+      )
+      const personalisedPrompt = upstreamCalls[upstreamCalls.length - 1]?.body?.messages?.[0]?.content ?? ''
+      check(
+        'saved preferences travel with every scan',
+        personalised.status === 200 &&
+          /vegetarian/i.test(personalisedPrompt) &&
+          /gluten/i.test(personalisedPrompt) &&
+          /never suggest/i.test(personalisedPrompt),
+        personalisedPrompt.slice(0, 400),
+      )
+
+      const manualPrefs = await json(
+        await callScan('/api/fitness/preferences', {
+          method: 'PUT',
+          headers: scanHeaders,
+          body: JSON.stringify({
+            preferences: {
+              diets: ['vegan'],
+              allergens: ['nuts'],
+              avoid: [],
+              likes: [],
+              notes: '',
+            },
+          }),
+        }),
+      )
+      check(
+        'the member can correct the learned preferences by hand',
+        manualPrefs.status === 200 &&
+          manualPrefs.body.preferences?.diets?.[0] === 'vegan' &&
+          manualPrefs.body.preferences?.source === 'manual',
+        JSON.stringify(manualPrefs.body),
+      )
+
+      const forgotten = await json(
+        await callScan('/api/fitness/preferences', { method: 'DELETE', headers: scanHeaders }),
+      )
+      const afterForget = await json(await callScan('/api/fitness/preferences', { headers: scanHeaders }))
+      check(
+        'the member can forget everything the coach learned',
+        forgotten.status === 200 &&
+          forgotten.body.preferences === null &&
+          afterForget.body.preferences === null,
+        JSON.stringify({ forgotten: forgotten.body, after: afterForget.body }),
       )
 
       await scanDb

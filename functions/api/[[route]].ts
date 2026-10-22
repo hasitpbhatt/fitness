@@ -12,6 +12,7 @@ import habitRoutes from '../routes/habits'
 import mealPlanRoutes from '../routes/mealPlan'
 import measurementRoutes from '../routes/measurements'
 import notificationRoutes from '../routes/notifications'
+import preferenceRoutes from '../routes/preferences'
 import profileRoutes from '../routes/profile'
 import scanRoutes from '../routes/scan'
 import type { Bindings, Variables } from '../lib/types'
@@ -63,6 +64,7 @@ app.route('/', habitRoutes)
 app.route('/', mealPlanRoutes)
 app.route('/', measurementRoutes)
 app.route('/', notificationRoutes)
+app.route('/', preferenceRoutes)
 app.route('/', profileRoutes)
 app.route('/', scanRoutes)
 
