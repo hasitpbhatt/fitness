@@ -69,10 +69,23 @@ export function trackEvent(
         if (typeof body?.needs_clarification === 'boolean') {
           details.needs_clarification = body.needs_clarification
         }
+        // Capture token usage from freellm
+        const freellm = body?.freellm as { usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } } | undefined
+        if (freellm?.usage) {
+          details.tokens = freellm.usage
+        }
         properties = JSON.stringify(details).slice(0, 500)
       } else if (name === 'scan_logged') {
         const details: Record<string, unknown> = { surface }
         if (typeof body?.calories === 'number') details.calories = Math.round(body.calories)
+        properties = JSON.stringify(details).slice(0, 500)
+      } else if (name === 'coach_reply') {
+        const details: Record<string, unknown> = { surface }
+        // Capture token usage from freellm
+        const freellm = body?.freellm as { usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } } | undefined
+        if (freellm?.usage) {
+          details.tokens = freellm.usage
+        }
         properties = JSON.stringify(details).slice(0, 500)
       }
     } catch {

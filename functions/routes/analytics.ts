@@ -22,6 +22,7 @@ type EventRow = {
   status: number | null
   error_code: string | null
   latency_ms: number | null
+  properties: string | null
 }
 type GrantRow = { tier: string; status: string; count: number }
 
@@ -30,6 +31,41 @@ function percentile(values: number[], p: number): number | null {
   const sorted = [...values].sort((a, b) => a - b)
   const index = Math.max(0, Math.min(sorted.length - 1, Math.ceil((p / 100) * sorted.length) - 1))
   return sorted[index]
+}
+
+// Rough per-1k token cost estimates (USD) for different model tiers
+// These are ballpark figures; real cost varies by provider
+const MODEL_COST_PER_1K: Record<string, { input: number; output: number }> = {
+  // Nemotron/Ultra models (conservative estimates)
+  'nemotron': { input: 0.001, output: 0.001 },
+  // Default fallback
+  'default': { input: 0.002, output: 0.002 },
+}
+
+function estimateCost(model: string | undefined, promptTokens: number, completionTokens: number): number | null {
+  if (!promptTokens && !completionTokens) return null
+  const key = model?.toLowerCase().includes('nemotron') ? 'nemotron' : 'default'
+  const rates = MODEL_COST_PER_1K[key]
+  return Math.round(((promptTokens / 1000) * rates.input + (completionTokens / 1000) * rates.output) * 10000) / 10000
+}
+
+function parseTokens(properties: string | null): { prompt: number; completion: number; total: number; model?: string } | null {
+  if (!properties) return null
+  try {
+    const parsed = JSON.parse(properties)
+    const tokens = parsed.tokens
+    if (tokens && typeof tokens.prompt_tokens === 'number' && typeof tokens.completion_tokens === 'number') {
+      return {
+        prompt: tokens.prompt_tokens,
+        completion: tokens.completion_tokens,
+        total: tokens.total_tokens,
+        model: parsed.model,
+      }
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return null
 }
 
 function isAiCall(event: EventRow): boolean {
@@ -47,7 +83,15 @@ function summarize(events: EventRow[], includeSurface: boolean) {
     .filter((value): value is number => typeof value === 'number' && value >= 0)
 
   const errors: Record<string, number> = {}
+  const costs: number[] = []
   for (const event of calls) {
+    if ((event.status ?? 0) >= 200 && (event.status ?? 0) < 300) {
+      const tokens = parseTokens(event.properties)
+      if (tokens) {
+        const cost = estimateCost(tokens.model, tokens.prompt, tokens.completion)
+        if (cost !== null) costs.push(cost)
+      }
+    }
     if ((event.status ?? 0) >= 200 && (event.status ?? 0) < 300) continue
     const key = `${event.status ?? 0}:${event.error_code ?? 'unknown'}`
     errors[key] = (errors[key] ?? 0) + 1
@@ -81,6 +125,12 @@ function summarize(events: EventRow[], includeSurface: boolean) {
       p50: percentile(latencies, 50),
       p95: percentile(latencies, 95),
     },
+    cost_usd: costs.length > 0
+      ? {
+          total: Math.round(costs.reduce((a, b) => a + b, 0) * 10000) / 10000,
+          per_call_avg: Math.round((costs.reduce((a, b) => a + b, 0) / costs.length) * 10000) / 10000,
+        }
+      : null,
     errors,
     by_surface: includeSurface ? surfaces : undefined,
   }
@@ -281,6 +331,10 @@ app.get('/api/admin/analytics', async (c) => {
       sample_limit: MAX_EVENTS,
       scan: summarize(scanEvents, true),
       coach: summarize(coachEvents, false),
+    },
+    cost: {
+      scan: summarize(scanEvents, true).cost_usd,
+      coach: summarize(coachEvents, false).cost_usd,
     },
     access: { grants: grants.results },
     cohort_retention: cohortRetention,

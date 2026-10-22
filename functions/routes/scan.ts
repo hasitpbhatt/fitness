@@ -285,7 +285,7 @@ function extractJson(text: string): unknown {
   }
 }
 
-type UpstreamOk = { ok: true; content: string }
+type UpstreamOk = { ok: true; content: string; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined }
 type UpstreamError = { ok: false; status: 429 | 502 | 503; message: string }
 
 async function callFreellm(
@@ -323,13 +323,21 @@ async function callFreellm(
       return { ok: false, status: 502, message: 'The model could not process that request. Try again.' }
     }
     const data = (await response.json().catch(() => null)) as
-      | { choices?: Array<{ message?: { content?: unknown } }> }
+      | { choices?: Array<{ message?: { content?: unknown } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
       | null
     const content = data?.choices?.[0]?.message?.content
     if (typeof content !== 'string' || !content.trim()) {
       return { ok: false, status: 502, message: 'The model returned an empty answer. Try again.' }
     }
-    return { ok: true, content }
+    const usage = data?.usage
+    return {
+      ok: true,
+      content,
+      usage:
+        usage && typeof usage.prompt_tokens === 'number' && typeof usage.completion_tokens === 'number' && typeof usage.total_tokens === 'number'
+          ? { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens, total_tokens: usage.total_tokens }
+          : undefined,
+    }
   } catch (err) {
     console.error('[scan] freellm request failed', model, err)
     return { ok: false, status: 502, message: 'The model did not respond in time. Try again.' }
@@ -479,7 +487,7 @@ app.post('/api/fitness/scan', async (c) => {
       502,
     )
   }
-  return c.json({ ...result, quota })
+  return c.json({ ...result, quota, freellm: upstream.usage ? { usage: { prompt_tokens: upstream.usage.prompt_tokens, completion_tokens: upstream.usage.completion_tokens, total_tokens: upstream.usage.total_tokens } } : undefined })
 })
 
 // ------------------------------------------------------------- text estimate
@@ -540,7 +548,7 @@ app.post('/api/fitness/scan/text', async (c) => {
       502,
     )
   }
-  return c.json({ ...result, quota })
+  return c.json({ ...result, quota, freellm: upstream.usage ? { usage: { prompt_tokens: upstream.usage.prompt_tokens, completion_tokens: upstream.usage.completion_tokens, total_tokens: upstream.usage.total_tokens } } : undefined })
 })
 
 // ------------------------------------------------------------- food search
@@ -597,7 +605,7 @@ app.post('/api/fitness/scan/suggest', async (c) => {
       502,
     )
   }
-  return c.json({ query, options, quota })
+  return c.json({ query, options, quota, freellm: upstream.usage ? { usage: { prompt_tokens: upstream.usage.prompt_tokens, completion_tokens: upstream.usage.completion_tokens, total_tokens: upstream.usage.total_tokens } } : undefined })
 })
 
 // ---------------------------------------------------------------- refine
@@ -682,7 +690,7 @@ app.post('/api/fitness/scan/refine', async (c) => {
       502,
     )
   }
-  return c.json({ ...updated, quota })
+  return c.json({ ...updated, quota, freellm: upstream.usage ? { usage: { prompt_tokens: upstream.usage.prompt_tokens, completion_tokens: upstream.usage.completion_tokens, total_tokens: upstream.usage.total_tokens } } : undefined })
 })
 
 // ------------------------------------------------------------- log scan

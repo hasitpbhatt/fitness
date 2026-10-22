@@ -46,7 +46,7 @@ Rules:
 type ChatMessage = { role: 'user' | 'assistant'; content: string }
 type Quota = { used: number; limit: number }
 type UpstreamResult =
-  | { ok: true; content: string }
+  | { ok: true; content: string; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined }
   | { ok: false; status: 502 | 503; error: string; message: string }
 
 type DaySummary = {
@@ -263,7 +263,7 @@ async function callCoach(
       }
     }
     const data = (await response.json().catch(() => null)) as
-      | { choices?: Array<{ message?: { content?: unknown } }> }
+      | { choices?: Array<{ message?: { content?: unknown } }>; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } }
       | null
     const content = data?.choices?.[0]?.message?.content
     if (typeof content !== 'string' || !content.trim()) {
@@ -274,7 +274,15 @@ async function callCoach(
         message: 'The coach returned an empty answer. Try again.',
       }
     }
-    return { ok: true, content: content.trim().slice(0, MAX_REPLY_CHARS) }
+    const usage = data?.usage
+    return {
+      ok: true,
+      content: content.trim().slice(0, MAX_REPLY_CHARS),
+      usage:
+        usage && typeof usage.prompt_tokens === 'number' && typeof usage.completion_tokens === 'number' && typeof usage.total_tokens === 'number'
+          ? { prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens, total_tokens: usage.total_tokens }
+          : undefined,
+    }
   } catch (err) {
     console.error('[coach] freellm request failed', model, err)
     return {
@@ -358,7 +366,7 @@ app.post('/api/fitness/coach', async (c) => {
     return c.json({ error: result.error, message: result.message, quota }, result.status)
   }
 
-  return c.json({ reply: result.content, quota })
+  return c.json({ reply: result.content, quota, freellm: result.usage ? { usage: { prompt_tokens: result.usage.prompt_tokens, completion_tokens: result.usage.completion_tokens, total_tokens: result.usage.total_tokens } } : undefined })
 })
 
 export default app
