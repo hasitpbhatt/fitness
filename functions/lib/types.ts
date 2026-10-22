@@ -9,7 +9,6 @@ export interface Bindings {
   FREELLM_BASE_URL?: string
   FREELLM_VL_MODEL?: string
   FREELLM_TEXT_MODEL?: string
-  FREELLM_API_KEY?: string
   FITNESS_DATA_KEY?: string
 }
 

@@ -6,8 +6,9 @@
 // metered against that member's own freellm balance instead of the shared
 // service account. Members never copy or paste a key.
 //
-// If the member token is rejected (no credits, tier gate), the caller falls
-// back to the shared service key so the feature still works.
+// There is no shared service key and no fallback: if a member's own token is
+// rejected (no credits, tier gate), the call surfaces that error to the member
+// instead of silently spending someone else's credits.
 
 import { decryptSecret, encryptSecret, sha256Hex } from './crypto'
 import type { Bindings } from './types'
