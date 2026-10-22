@@ -5,6 +5,8 @@ import { useAuth } from '../lib/auth'
 import { detectTimezone } from '../lib/timezone'
 import { useEntitlement } from '../lib/useEntitlement'
 import { Button, Card } from '../components/ui'
+import { Icon } from '../components/icons'
+import { useToast } from '../lib/useToast'
 import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { TimezoneModal } from '../components/food/TimezoneModal'
 import { MacroBars } from '../components/nutrition/MacroBars'
@@ -75,6 +77,7 @@ function DashboardSkeleton() {
 export default function Dashboard() {
   const { user, loading } = useAuth()
   const entitlement = useEntitlement(user?.id)
+  const { showToast } = useToast()
   const [logs, setLogs] = useState<FitnessLog[] | null>(null)
   const [streak, setStreak] = useState<Streak | null>(null)
   const [badges, setBadges] = useState<Badge[] | null>(null)
@@ -85,9 +88,6 @@ export default function Dashboard() {
   const [newBadges, setNewBadges] = useState<Badge[]>([])
   const [scanOpen, setScanOpen] = useState(false)
   const [scanTierNotice, setScanTierNotice] = useState(false)
-  const [scanToast, setScanToast] = useState<{ calories: number; scanId: string } | null>(null)
-  const [undoingMeal, setUndoingMeal] = useState(false)
-  const [undoError, setUndoError] = useState<string | null>(null)
   const [timezoneOpen, setTimezoneOpen] = useState(false)
   const [savingTimezone, setSavingTimezone] = useState(false)
   const [targets, setTargets] = useState<MacroTargets | null>(null)
@@ -212,28 +212,28 @@ export default function Dashboard() {
   }
 
   const handleMealLogged = (meal: { calories: number; scanId: string }) => {
-    setScanToast(meal)
-    setUndoError(null)
     void loadData()
+    showToast(`About ${meal.calories.toLocaleString('en-US')} kcal added to today.`, {
+      tone: 'success',
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          void undoMeal(meal.scanId)
+        },
+      },
+    })
   }
 
-  const undoMeal = async () => {
-    if (!scanToast || undoingMeal) return
-    setUndoingMeal(true)
-    setUndoError(null)
+  const undoMeal = async (scanId: string) => {
     try {
-      await api.post('/fitness/log/scan/undo', { scan_id: scanToast.scanId })
-      setScanToast(null)
+      await api.post('/fitness/log/scan/undo', { scan_id: scanId })
       void loadData()
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        setScanToast(null)
         void loadData()
       } else {
-        setUndoError('Could not undo that meal. Please try again.')
+        showToast('Could not undo that meal. Please try again.', { tone: 'danger' })
       }
-    } finally {
-      setUndoingMeal(false)
     }
   }
 
@@ -277,11 +277,19 @@ export default function Dashboard() {
               Daily quest: log at least one activity
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <Link to="/log"><Button size="lg">Log activity</Button></Link>
+            {/* The two things a member actually does live here, so they get
+                full-width buttons on a phone rather than a cramped wrapped row. */}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <Link to="/log" className="block w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto">
+                  <Icon name="plus-circle" size={18} />
+                  Log activity
+                </Button>
+              </Link>
               <Button
                 size="lg"
                 variant="secondary"
+                className="w-full sm:w-auto"
                 onClick={() => {
                   if (entitlement && !entitlement.features.ai_tools) {
                     setScanTierNotice(true)
@@ -290,13 +298,15 @@ export default function Dashboard() {
                   setScanOpen(true)
                 }}
               >
+                <Icon name="camera" size={18} />
                 Scan food
               </Button>
               <Link
                 to="/achievements"
-                className="text-[13px] text-muted transition-colors hover:text-content"
+                className="tap flex items-center justify-center text-[13px] text-muted transition-colors hover:text-content sm:justify-start"
               >
-                View badges →
+                View badges
+                <Icon name="chevron-right" size={15} />
               </Link>
             </div>
             {(scanTierNotice || (entitlement !== null && !entitlement.features.ai_tools)) && (
@@ -475,57 +485,25 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {(newBadges.length > 0 || scanToast !== null) && (
-        <div className="toast-container flex flex-col gap-2">
-          {scanToast !== null && (
-            <div className="flex items-center gap-3 rounded-xl border border-gain/40 bg-surface px-4 py-3 shadow-lg">
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold">Meal logged</p>
-                <p className="truncate text-[12px] text-muted">
-                  About {scanToast.calories.toLocaleString('en-US')} kcal added to today.
-                </p>
-                {undoError && <p className="mt-1 text-[11px] text-loss">{undoError}</p>}
-              </div>
-              <button
-                type="button"
-                onClick={() => void undoMeal()}
-                disabled={undoingMeal}
-                className="text-[12px] font-medium text-accent hover:underline disabled:opacity-40"
-              >
-                {undoingMeal ? 'Undoing…' : 'Undo'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setScanToast(null)
-                  setUndoError(null)
-                }}
-                className="text-muted hover:text-content"
-                aria-label="Dismiss meal notification"
-              >
-                ✕
-              </button>
+      {newBadges.length > 0 && (
+        <div className="toast-container flex flex-col items-stretch gap-2">
+          <div className="flex items-center gap-3 rounded-lg border border-warn/30 bg-surface px-3 py-2.5 text-[12px] shadow-lg">
+            <span className="text-xl" aria-hidden="true">{newBadges[0].icon ?? '🏆'}</span>
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-content">Badge unlocked!</p>
+              <p className="truncate text-muted">
+                {newBadges.map((b) => b.name ?? b.badge_code).join(', ')}
+              </p>
             </div>
-          )}
-          {newBadges.length > 0 && (
-            <div className="flex items-center gap-3 rounded-xl border border-amber-400/40 bg-surface px-4 py-3 shadow-lg">
-              <span className="text-2xl" aria-hidden="true">{newBadges[0].icon ?? '🏆'}</span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[13px] font-semibold">Badge unlocked!</p>
-                <p className="truncate text-[12px] text-muted">
-                  {newBadges.map((b) => b.name ?? b.badge_code).join(', ')}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setNewBadges([])}
-                className="text-muted hover:text-content"
-                aria-label="Dismiss badge notification"
-              >
-                ✕
-              </button>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={() => setNewBadges([])}
+              className="tap shrink-0 rounded p-1 text-muted hover:text-content"
+              aria-label="Dismiss badge notification"
+            >
+              <Icon name="close" size={14} />
+            </button>
+          </div>
         </div>
       )}
 

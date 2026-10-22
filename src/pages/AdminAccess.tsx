@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Button, Card, Input } from '../components/ui'
+import { ConfirmDialog } from '../components/feedback'
 import type { EntitlementStatus, FitnessTier } from '../lib/types'
 
 type AccessMember = {
@@ -60,7 +61,7 @@ function Badge({
         ? 'bg-warn/10 text-warn'
         : 'bg-surface-2 text-muted'
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${className}`}>{children}</span>
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${className}`}>{children}</span>
   )
 }
 
@@ -73,6 +74,7 @@ function AccessEditor({ member, onSaved }: { member: AccessMember; onSaved: () =
   const [note, setNote] = useState(member.note ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmRevoke, setConfirmRevoke] = useState(false)
 
   const save = async (nextTier = tier, nextStatus = status) => {
     setBusy(true)
@@ -159,10 +161,10 @@ function AccessEditor({ member, onSaved }: { member: AccessMember; onSaved: () =
         {member.is_active && (
           <Button
             type="button"
-            variant="secondary"
+            variant="danger"
             size="sm"
             disabled={busy}
-            onClick={() => void save(member.tier === 'free' ? 'plus' : member.tier, 'revoked')}
+            onClick={() => setConfirmRevoke(true)}
           >
             Revoke
           </Button>
@@ -173,6 +175,18 @@ function AccessEditor({ member, onSaved }: { member: AccessMember; onSaved: () =
           {error}
         </p>
       )}
+      <ConfirmDialog
+        open={confirmRevoke}
+        title={`Revoke access for @${member.username}?`}
+        description="They lose Plus and Coach features immediately. You can grant it back at any time."
+        confirmLabel="Revoke access"
+        busy={busy}
+        onCancel={() => setConfirmRevoke(false)}
+        onConfirm={() => {
+          void save(member.tier === 'free' ? 'plus' : member.tier, 'revoked')
+          setConfirmRevoke(false)
+        }}
+      />
     </div>
   )
 }

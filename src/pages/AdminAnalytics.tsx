@@ -188,6 +188,31 @@ export default function AdminAnalytics() {
 
   const maxActive = Math.max(1, ...(data?.activity.series.map((day) => day.active) ?? [1]))
 
+  // 90 bars in a 320px phone is an illegible smear, so a long window is
+  // bucketed into weeks. The bar count stays readable at every width.
+  const chartBucketed = (data?.activity.series.length ?? 0) > 30
+  const chartBars = (() => {
+    const series = data?.activity.series ?? []
+    if (!chartBucketed) {
+      return series.map((day) => ({
+        key: day.date,
+        value: day.active,
+        title: `${day.date}: ${day.active} active, ${day.logs} logs`,
+      }))
+    }
+    const buckets: Array<{ key: string; value: number; title: string }> = []
+    for (let index = 0; index < series.length; index += 7) {
+      const week = series.slice(index, index + 7)
+      const active = Math.round(week.reduce((sum, day) => sum + day.active, 0) / week.length)
+      buckets.push({
+        key: week[0].date,
+        value: active,
+        title: `${week[0].date} to ${week[week.length - 1].date}: ${active} active on average`,
+      })
+    }
+    return buckets
+  })()
+
   const changeDays = (next: number) => {
     if (next === days) return
     setFetching(true)
@@ -298,17 +323,18 @@ export default function AdminAnalytics() {
               </span>
             </div>
             <div className="mt-4 flex h-28 items-end gap-[2px]" role="img" aria-label="Daily active members">
-              {data.activity.series.map((day) => (
+              {chartBars.map((bar) => (
                 <div
-                  key={day.date}
+                  key={bar.key}
                   className="min-h-[2px] flex-1 rounded-t bg-accent/70"
-                  style={{ height: `${Math.max(2, (day.active / maxActive) * 100)}%` }}
-                  title={`${day.date}: ${day.active} active, ${day.logs} logs`}
+                  style={{ height: `${Math.max(2, (bar.value / maxActive) * 100)}%` }}
+                  title={bar.title}
                 />
               ))}
             </div>
             <div className="mt-2 flex justify-between text-[10px] text-muted">
               <span>{data.activity.series[0]?.date}</span>
+              {chartBucketed && <span>weekly average</span>}
               <span>{data.activity.series[data.activity.series.length - 1]?.date}</span>
             </div>
           </Card>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Button, Card, Input, Textarea } from '../components/ui'
+import { Alert, ConfirmDialog, EmptyState } from '../components/feedback'
 import type { AdminNotification } from '../lib/types'
 
 type FormState = {
@@ -55,6 +56,7 @@ export default function AdminNotifications() {
   const [busy, setBusy] = useState(false)
   const [fetching, setFetching] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmSend, setConfirmSend] = useState<AdminNotification | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
@@ -168,9 +170,7 @@ export default function AdminNotifications() {
       </div>
 
       {(message || error) && (
-        <div className={`rounded-lg border px-3 py-2 text-[12px] ${error ? 'border-loss/30 bg-loss/5 text-loss' : 'border-gain/30 bg-gain/5 text-gain'}`} role="status">
-          {error ?? message}
-        </div>
+        <Alert tone={error ? 'danger' : 'success'}>{error ?? message}</Alert>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
@@ -199,11 +199,11 @@ export default function AdminNotifications() {
               maxLength={200}
               onChange={(event) => setForm((current) => ({ ...current, url: event.target.value }))}
             />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label className="text-[12px] text-muted">
                 Audience
                 <select
-                  className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-content"
+                  className="input mt-1"
                   value={form.audience}
                   onChange={(event) => setForm((current) => ({
                     ...current,
@@ -253,9 +253,11 @@ export default function AdminNotifications() {
             </Button>
           </div>
           {notifications.length === 0 ? (
-            <p className="px-4 py-10 text-center text-[13px] text-muted">
-              Nothing composed yet.
-            </p>
+            <EmptyState
+              icon="bell"
+              title="Nothing composed yet"
+              description="Write a message on the left and save it as a draft."
+            />
           ) : (
             <div className="divide-y divide-line">
               {notifications.map((item) => (
@@ -278,7 +280,7 @@ export default function AdminNotifications() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {item.status !== 'sent' && item.status !== 'cancelled' && (
-                      <Button size="sm" variant="secondary" loading={busy} onClick={() => void act(item.id, 'send')}>
+                      <Button size="sm" variant="secondary" loading={busy} onClick={() => setConfirmSend(item)}>
                         Send now
                       </Button>
                     )}
@@ -297,6 +299,23 @@ export default function AdminNotifications() {
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmSend !== null}
+        title="Send this notification now?"
+        description={
+          confirmSend
+            ? `"${confirmSend.title}" will be delivered to ${AUDIENCE_LABELS[confirmSend.audience] ?? confirmSend.audience} straight away.`
+            : undefined
+        }
+        confirmLabel="Send now"
+        busy={busy}
+        onCancel={() => setConfirmSend(null)}
+        onConfirm={() => {
+          if (confirmSend) void act(confirmSend.id, 'send')
+          setConfirmSend(null)
+        }}
+      />
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { useAuth } from '../lib/auth'
 import { useEntitlement } from '../lib/useEntitlement'
 import { AIUsageMeter } from '../components/ai/AIUsageMeter'
 import { Button, Card, Input } from '../components/ui'
+import { EmptyState } from '../components/feedback'
 import type { Food, FoodOption, ScanQuota } from '../lib/types'
 
 type ManualForm = {
@@ -278,31 +279,36 @@ export default function Foods() {
 
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
-          <form onSubmit={(event) => void search(event)} className="flex flex-wrap gap-2 border-b border-line px-4 py-3">
+          <form onSubmit={(event) => void search(event)} className="flex flex-col gap-2 border-b border-line px-4 py-3 sm:flex-row sm:flex-wrap">
             <Input
-              className="min-w-[12rem] flex-1"
+              className="flex-1"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search roti, dal, paneer, Amul..."
               aria-label="Search foods"
             />
-            <Button type="submit" loading={searching}>Search</Button>
-            <Button
-              type="button"
-              variant="secondary"
-              loading={aiSearching}
-              disabled={!aiTools || aiExhausted(quota) || configured === false}
-              onClick={() => void aiSearch()}
-            >
-              AI search
-            </Button>
+            <div className="flex gap-2">
+              <Button type="submit" loading={searching} className="flex-1 sm:flex-none">Search</Button>
+              <Button
+                type="button"
+                variant="secondary"
+                loading={aiSearching}
+                disabled={!aiTools || aiExhausted(quota) || configured === false}
+                onClick={() => void aiSearch()}
+                className="flex-1 sm:flex-none"
+              >
+                AI search
+              </Button>
+            </div>
           </form>
           {source === 'ai' && results && results.length > 0 && (
             <p className="border-b border-line bg-surface-2 px-4 py-2 text-[11px] text-muted">
               AI estimates · choose an option, then adjust the portion.
             </p>
           )}
-          <div className="max-h-[28rem] overflow-y-auto">
+          {/* No nested scroll area: on a phone a scroll region inside a
+              scrolling page is a trap. The list simply grows. */}
+          <div>
             {results === null ? (
               <div className="flex flex-col gap-2 p-4">
                 {[0, 1, 2].map((index) => (
@@ -310,9 +316,11 @@ export default function Foods() {
                 ))}
               </div>
             ) : results.length === 0 ? (
-              <p className="p-8 text-center text-[13px] text-muted">
-                No matches. Add it manually on the right.
-              </p>
+              <EmptyState
+                icon="search"
+                title="No matches"
+                description="Try a different name, or add the food yourself with the form below."
+              />
             ) : (
               <div className="flex flex-col divide-y divide-line">
                 {results.map((food) => (

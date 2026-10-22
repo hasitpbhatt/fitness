@@ -4,6 +4,7 @@ import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import type { FitnessProfile } from '../lib/types'
 import { detectTimezone } from '../lib/timezone'
+import { Icon } from './icons'
 import { MobileBottomNav } from './nav/MobileBottomNav'
 import { MobileMenu } from './nav/MobileMenu'
 import { NotificationBanner } from './notifications/NotificationBanner'
@@ -153,14 +154,11 @@ function AppShellContent() {
                 <button
                   type="button"
                   onClick={() => setMenuOpen(true)}
-                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-content md:hidden"
+                  className="tap flex items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-content md:hidden"
                   aria-label="Open menu"
                   aria-expanded={menuOpen}
-                  aria-controls="mobile-menu"
                 >
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-                  </svg>
+                  <Icon name="menu" size={24} />
                 </button>
               </>
             ) : (
@@ -173,16 +171,20 @@ function AppShellContent() {
       </header>
       <main
         id="main-content"
-        className="mx-auto max-w-6xl px-4 py-6 pb-[calc(5rem_+_env(safe-area-inset-bottom))] md:pb-6"
+        className="mx-auto max-w-6xl px-4 py-6 pb-[calc(var(--bottom-nav-h)+var(--safe-bottom)+1rem)] md:pb-6"
       >
         <NotificationBanner />
         <Outlet />
       </main>
       <NotificationPopup />
       <MobileBottomNav />
-      <div id="mobile-menu">
-        <MobileMenu open={menuOpen} onClose={() => setMenuOpen(false)} isAdmin={user?.role === 'admin'} />
-      </div>
+      <MobileMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        isAdmin={user?.role === 'admin'}
+        username={user?.username}
+        onSignOut={() => void logout()}
+      />
     </div>
   )
 }

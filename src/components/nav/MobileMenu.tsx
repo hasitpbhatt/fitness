@@ -1,57 +1,125 @@
-import { useEffect } from 'react'
+import { useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { Icon, type IconName } from '../icons'
+import { useModalFocus } from '../../lib/useModalFocus'
+
+type MenuItem = { to: string; label: string; icon: IconName }
+
+const memberItems: MenuItem[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: 'home' },
+  { to: '/coach', label: 'AI coach', icon: 'chat' },
+  { to: '/log', label: 'Log activity', icon: 'plus-circle' },
+  { to: '/foods', label: 'Foods', icon: 'utensils' },
+  { to: '/meal-plan', label: 'Meal plan', icon: 'book' },
+  { to: '/measurements', label: 'Measurements', icon: 'scale' },
+  { to: '/achievements', label: 'Achievements', icon: 'trophy' },
+  { to: '/leaderboard', label: 'Leaderboard', icon: 'bar-chart' },
+]
+
+const adminItems: MenuItem[] = [
+  { to: '/admin/members', label: 'Members', icon: 'user' },
+  { to: '/admin/access', label: 'Access', icon: 'lock' },
+  { to: '/admin/analytics', label: 'Analytics', icon: 'bar-chart' },
+  { to: '/admin/notifications', label: 'Notifications', icon: 'bell' },
+]
 
 export function MobileMenu({
   open,
   onClose,
   isAdmin = false,
+  username,
+  onSignOut,
 }: {
   open: boolean
   onClose: () => void
   isAdmin?: boolean
+  username?: string
+  onSignOut?: () => void
 }) {
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden'
-    } else {
-      document.body.style.overflow = ''
-    }
-    return () => { document.body.style.overflow = '' }
-  }, [open])
+  const panelRef = useRef<HTMLDivElement>(null)
+  useModalFocus(open, panelRef, onClose)
 
   if (!open) return null
 
+  const items = isAdmin ? [...memberItems, ...adminItems] : memberItems
+
   return (
     <div className="fixed inset-0 z-40 md:hidden">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="absolute right-0 top-0 bottom-0 w-72 bg-bg border-l border-line p-4">
-        <div className="flex items-center justify-between mb-6">
-          <span className="font-semibold text-content">fitness</span>
-          <button onClick={onClose} className="text-muted hover:text-content">
-            <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+      <button
+        type="button"
+        className="absolute inset-0 h-full w-full cursor-default bg-black/60"
+        onClick={onClose}
+        aria-label="Close menu"
+        tabIndex={-1}
+      />
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu"
+        tabIndex={-1}
+        className="absolute inset-y-0 right-0 flex w-[min(20rem,85vw)] flex-col border-l border-line bg-bg"
+      >
+        <div className="flex items-center justify-between border-b border-line px-4 py-3">
+          <div className="min-w-0">
+            <p className="font-semibold text-content">fitness</p>
+            {username && <p className="truncate text-[11px] text-muted">@{username}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="tap flex items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-content"
+            aria-label="Close menu"
+          >
+            <Icon name="close" size={22} />
           </button>
         </div>
-        <nav className="flex flex-col gap-1">
-          <Link to="/dashboard" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Dashboard</Link>
-          <Link to="/coach" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">AI coach</Link>
-          <Link to="/log" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Log</Link>
-          <Link to="/foods" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Foods</Link>
-          <Link to="/meal-plan" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Meal plan</Link>
-          <Link to="/measurements" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Measurements</Link>
-          <Link to="/achievements" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Achievements</Link>
-          <Link to="/leaderboard" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Leaderboard</Link>
-          {isAdmin && (
-            <>
-              <Link to="/admin/members" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Members</Link>
-              <Link to="/admin/access" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Access</Link>
-              <Link to="/admin/analytics" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Analytics</Link>
-              <Link to="/admin/notifications" onClick={onClose} className="px-3 py-2 text-[13px] text-content hover:bg-surface-2 rounded-lg">Notifications</Link>
-            </>
-          )}
-          <Link to="/install" onClick={onClose} className="px-3 py-2 text-[13px] text-muted hover:bg-surface-2 hover:text-content rounded-lg">Install app</Link>
+
+        <nav aria-label="All pages" className="min-h-0 flex-1 overflow-y-auto p-2">
+          <ul className="flex flex-col">
+            {items.map((item) => (
+              <li key={item.to}>
+                <Link
+                  to={item.to}
+                  onClick={onClose}
+                  className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-[13px] text-content hover:bg-surface-2"
+                >
+                  <span className="text-muted" aria-hidden="true">
+                    <Icon name={item.icon} size={19} />
+                  </span>
+                  {item.label}
+                </Link>
+              </li>
+            ))}
+            <li>
+              <Link
+                to="/install"
+                onClick={onClose}
+                className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-[13px] text-muted hover:bg-surface-2 hover:text-content"
+              >
+                <span className="text-muted" aria-hidden="true">
+                  <Icon name="download" size={19} />
+                </span>
+                Install app
+              </Link>
+            </li>
+          </ul>
         </nav>
+
+        {onSignOut && (
+          <div className="border-t border-line p-2">
+            <button
+              type="button"
+              onClick={onSignOut}
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-lg px-3 text-[13px] text-muted hover:bg-surface-2 hover:text-content"
+            >
+              <span className="text-muted" aria-hidden="true">
+                <Icon name="logout" size={19} />
+              </span>
+              Sign out
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

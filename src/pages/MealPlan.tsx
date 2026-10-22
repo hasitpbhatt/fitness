@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
+import { Alert } from '../components/feedback'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
@@ -111,6 +112,7 @@ export default function MealPlan() {
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
+  const [activeDay, setActiveDay] = useState(0)
 
   useEffect(() => {
     if (!user) return
@@ -119,6 +121,8 @@ export default function MealPlan() {
       .then((result) => {
         if (!active) return
         setPlan(result)
+        setError(null)
+        setActiveDay(0)
       })
       .catch(() => {
         if (!active) return
@@ -214,11 +218,17 @@ export default function MealPlan() {
       </div>
 
       {error && (
-        <div className="no-print flex flex-wrap items-center justify-between gap-2 rounded-lg border border-loss/30 bg-loss/5 px-3 py-2 text-[12px] text-loss" role="alert">
-          <span>{error}</span>
-          <Button variant="secondary" size="sm" onClick={retry}>
-            Try again
-          </Button>
+        <div className="no-print">
+          <Alert
+            tone="danger"
+            action={
+              <Button variant="secondary" size="sm" onClick={retry}>
+                Try again
+              </Button>
+            }
+          >
+            {error}
+          </Alert>
         </div>
       )}
 
@@ -258,7 +268,34 @@ export default function MealPlan() {
             )}
           </Card>
 
-          <div className={`flex flex-col gap-4 ${fetching ? 'opacity-60' : ''}`}>
+          {/* Seven stacked day cards is a 4000px page on a phone. On a small
+              screen the days become a tab strip; on a wide screen (and in
+              print) every day stays on the page. */}
+          <div className="lg:hidden">
+            <div className="scroll-x scroll-x-pad mb-3" role="tablist" aria-label="Plan day">
+              {plan.days.map((day, index) => (
+                <button
+                  key={day.date}
+                  type="button"
+                  role="tab"
+                  aria-selected={index === activeDay}
+                  onClick={() => setActiveDay(index)}
+                  className={`min-h-[40px] rounded-lg border px-3 text-[12px] font-medium transition-colors ${
+                    index === activeDay
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-line text-muted hover:text-content'
+                  }`}
+                >
+                  {day.date_label}
+                </button>
+              ))}
+            </div>
+            <div className={fetching ? 'opacity-60' : ''}>
+              {plan.days[activeDay] && <MealCard day={plan.days[activeDay]} />}
+            </div>
+          </div>
+
+          <div className={`hidden flex-col gap-4 lg:flex ${fetching ? 'opacity-60' : ''}`}>
             {plan.days.map((day) => (
               <MealCard key={day.date} day={day} />
             ))}

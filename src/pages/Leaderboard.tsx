@@ -113,35 +113,35 @@ export default function Leaderboard() {
               return (
                 <div
                   key={entry.id}
-                  className={`flex items-center justify-between px-2 py-2.5 ${isMe ? 'rounded-lg bg-accent/5' : ''}`}
+                  className={`flex items-center justify-between gap-2 px-2 py-2.5 ${isMe ? 'rounded-lg bg-accent/5' : ''}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="flex w-8 justify-center">
+                  <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+                    <span className="flex w-8 shrink-0 justify-center">
                       {i < 3 ? (
                         <span className="text-lg" aria-label={`Rank ${i + 1}`}>{MEDALS[i]}</span>
                       ) : (
                         <span className="num text-[13px] text-muted">#{i + 1}</span>
                       )}
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 items-center gap-2">
                       {entry.avatar_url ? (
-                        <img src={entry.avatar_url} alt="" className="h-6 w-6 rounded-full" />
+                        <img src={entry.avatar_url} alt="" className="h-6 w-6 shrink-0 rounded-full" />
                       ) : (
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-2 text-[11px] text-muted">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-[11px] text-muted">
                           {(entry.username || '?').charAt(0).toUpperCase()}
                         </span>
                       )}
-                      <span className="text-[13px] font-medium text-content">
+                      <span className="truncate text-[13px] font-medium text-content">
                         {entry.username || 'Anonymous'}
                       </span>
                       {isMe && (
-                        <span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                        <span className="shrink-0 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
                           You
                         </span>
                       )}
                     </div>
                   </div>
-                  <span className="num text-[13px] text-muted">{entry.workout_minutes}m</span>
+                  <span className="num shrink-0 text-[13px] text-muted">{entry.workout_minutes}m</span>
                 </div>
               )
             })}

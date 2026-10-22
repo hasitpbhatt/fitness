@@ -27,11 +27,13 @@ const BADGES: BadgeDef[] = [
   { code: 'streak_365', name: 'One Year Streak', icon: '🌟', rarity: 'legendary', threshold: 365, condition: 'Log 365 days in a row' },
 ]
 
+// Rarity uses the app's own tokens, not raw Tailwind palette colours, so a
+// badge looks like the rest of the product.
 const RARITY: Record<Rarity, { card: string; text: string; label: string }> = {
   common: { card: 'border-line bg-surface', text: 'text-muted', label: 'Common' },
   rare: { card: 'border-accent/40 bg-accent/5', text: 'text-accent', label: 'Rare' },
-  epic: { card: 'border-purple-400/40 bg-purple-400/5', text: 'text-purple-300', label: 'Epic' },
-  legendary: { card: 'border-amber-400/40 bg-amber-400/5', text: 'text-amber-300', label: 'Legendary' },
+  epic: { card: 'border-gain/40 bg-gain/5', text: 'text-gain', label: 'Epic' },
+  legendary: { card: 'border-warn/40 bg-warn/5', text: 'text-warn', label: 'Legendary' },
 }
 
 function remainingLabel(def: BadgeDef, currentStreak: number, unlocked: boolean): string {
@@ -92,7 +94,7 @@ export default function Achievements() {
     return (
       <div className="flex flex-col gap-6" role="status" aria-label="Loading achievements">
         <div className="h-40 animate-pulse rounded-xl border border-line bg-surface" />
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-4">
           {BADGES.map((b) => (
             <div key={b.code} className="h-40 animate-pulse rounded-xl border border-line bg-surface" />
           ))}
@@ -182,17 +184,17 @@ export default function Achievements() {
           return (
             <div
               key={def.code}
-              className={`rounded-xl border p-4 text-center transition-colors ${rarity.card} ${unlocked ? '' : 'opacity-80'}`}
+              className={`rounded-xl border p-3 text-center transition-colors sm:p-4 ${rarity.card} ${unlocked ? '' : 'opacity-80'}`}
               title={unlocked ? `Unlocked ${new Date(unlocked.awarded_at).toLocaleDateString()}` : undefined}
             >
               <div className={`text-3xl ${unlocked ? '' : 'opacity-60 grayscale'}`} aria-hidden="true">
                 {def.icon}
               </div>
-              <h3 className="mt-2 text-[13px] font-medium">{def.name}</h3>
+              <h3 className="mt-2 text-[13px] font-medium text-content">{def.name}</h3>
               <p className={`mt-0.5 text-[10px] uppercase tracking-wide ${rarity.text}`}>
                 {rarity.label}
               </p>
-              <p className="mt-1 text-[11px] text-muted">{def.condition}</p>
+              <p className="mt-1 text-[11px] leading-snug text-muted">{def.condition}</p>
               {unlocked ? (
                 <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-gain/10 px-2 py-0.5 text-[11px] font-medium text-gain">
                   ✓ Unlocked

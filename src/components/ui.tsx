@@ -1,5 +1,7 @@
+import type { ReactNode } from 'react'
+
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'ghost'
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   size?: 'sm' | 'md' | 'lg'
   loading?: boolean
 }
@@ -13,20 +15,22 @@ export function Button({
   className = '',
   ...props
 }: ButtonProps) {
-  const base = 'inline-flex items-center justify-center font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 disabled:cursor-not-allowed'
+  // The size classes come from index.css so they inherit the same 44px
+  // minimum touch target and line height as every other control.
   const variants = {
-    primary: 'bg-accent text-white hover:bg-accent-hover',
-    secondary: 'bg-surface-2 text-content hover:bg-surface-3 border border-line',
-    ghost: 'text-content hover:bg-surface-2',
+    primary: 'btn-primary',
+    secondary: 'btn-secondary',
+    ghost: 'btn-ghost',
+    danger: 'btn-danger',
   }
   const sizes = {
-    sm: 'px-3 py-1.5 text-[12px]',
-    md: 'px-4 py-2 text-[13px]',
-    lg: 'px-6 py-3 text-[14px]',
+    sm: 'btn-sm',
+    md: '',
+    lg: 'btn-lg',
   }
   return (
     <button
-      className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`${variants[variant]} ${sizes[size]} ${className}`}
       disabled={disabled || loading}
       {...props}
     >
@@ -45,29 +49,9 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {}
 
 export function Card({ className = '', children, ...props }: CardProps) {
   return (
-    <div className={`rounded-xl border border-line bg-surface ${className}`} {...props}>
+    <div className={`card ${className}`} {...props}>
       {children}
     </div>
-  )
-}
-
-export function CardHeader({ title, action, className = '' }: { title: string; action?: React.ReactNode; className?: string }) {
-  return (
-    <div className={`flex items-center justify-between px-4 py-3 ${className}`}>
-      <h3 className="font-semibold text-content">{title}</h3>
-      {action && <div>{action}</div>}
-    </div>
-  )
-}
-
-export interface CreditsProps {
-  value: number
-  className?: string
-}
-
-export function Credits({ value, className = '' }: CreditsProps) {
-  return (
-    <span className={`num font-semibold ${className}`}>{value.toLocaleString('en-US')}</span>
   )
 }
 
@@ -86,7 +70,7 @@ export interface SelectProps<T extends SelectOption = SelectOption> {
   options: T[]
   disabled?: boolean
   className?: string
-  renderOption?: (opt: T) => React.ReactNode
+  renderOption?: (opt: T) => ReactNode
 }
 
 export function Select<T extends SelectOption = SelectOption>({
@@ -119,22 +103,16 @@ export function Select<T extends SelectOption = SelectOption>({
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 
+/**
+ * Uses the shared `.input` class so every field is a 44px touch target and
+ * renders at 16px on phones (13px makes iOS Safari zoom the page on focus).
+ */
 export function Input({ className = '', ...props }: InputProps) {
-  return (
-    <input
-      className={`w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-content placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent ${className}`}
-      {...props}
-    />
-  )
+  return <input className={`input ${className}`} {...props} />
 }
 
 export interface TextareaProps extends React.ComponentPropsWithRef<'textarea'> {}
 
 export function Textarea({ className = '', ...props }: TextareaProps) {
-  return (
-    <textarea
-      className={`w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] text-content placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent ${className}`}
-      {...props}
-    />
-  )
+  return <textarea className={`input ${className}`} {...props} />
 }

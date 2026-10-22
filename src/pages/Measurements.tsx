@@ -4,6 +4,7 @@ import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { detectTimezone, localDate } from '../lib/timezone'
 import { Button, Card, Input } from '../components/ui'
+import { ConfirmDialog } from '../components/feedback'
 import type { Measurement } from '../lib/types'
 
 const FIELDS = [
@@ -49,6 +50,7 @@ export default function Measurements() {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<Measurement | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
@@ -162,12 +164,12 @@ export default function Measurements() {
   }
 
   const remove = async (entry: Measurement) => {
-    if (!window.confirm(`Delete measurements for ${formatDate(entry.recorded_at)}?`)) return
     setDeleting(entry.id)
     setError(null)
     try {
       await api.del(`/fitness/measurements/${entry.id}`)
       setMessage('Measurement deleted.')
+      setPendingDelete(null)
       await load()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Could not delete that measurement.')
@@ -286,25 +288,32 @@ export default function Measurements() {
             {measurements.map((entry) => (
               <div key={entry.id} className="flex flex-wrap items-start gap-3 px-4 py-3">
                 <div className="min-w-[9rem] flex-1">
-                  <p className="text-[13px] font-medium">{formatDate(entry.recorded_at)}</p>
-                  <p className="mt-0.5 text-[12px] text-muted">
-                    {FIELDS.map((field) => `${field.label} ${displayValue(entry[field.key], field.unit)}`).join('  |  ')}
-                  </p>
+                  <p className="text-[13px] font-medium text-content">{formatDate(entry.recorded_at)}</p>
+                  {/* One number per line reads cleanly on a phone; a single
+                      pipe-joined string wrapped into an unreadable smear. */}
+                  <dl className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-muted">
+                    {FIELDS.map((field) => (
+                      <div key={field.key} className="flex items-baseline gap-1">
+                        <dt>{field.label}</dt>
+                        <dd className="num text-content">{displayValue(entry[field.key], field.unit)}</dd>
+                      </div>
+                    ))}
+                  </dl>
                   {entry.note && <p className="mt-1 text-[12px] text-muted">{entry.note}</p>}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex shrink-0 gap-1">
                   <button
                     type="button"
                     onClick={() => edit(entry)}
-                    className="min-h-[44px] rounded-md px-3 text-[12px] text-muted transition-colors hover:bg-surface-2 hover:text-content"
+                    className="tap rounded-md px-3 text-[12px] text-muted transition-colors hover:bg-surface-2 hover:text-content"
                   >
                     Edit
                   </button>
                   <button
                     type="button"
-                    onClick={() => void remove(entry)}
+                    onClick={() => setPendingDelete(entry)}
                     disabled={deleting === entry.id}
-                    className="min-h-[44px] rounded-md px-3 text-[12px] text-loss transition-colors hover:bg-loss/10 disabled:opacity-40"
+                    className="tap rounded-md px-3 text-[12px] text-loss transition-colors hover:bg-loss/10 disabled:opacity-40"
                   >
                     {deleting === entry.id ? 'Deleting' : 'Delete'}
                   </button>
@@ -314,6 +323,22 @@ export default function Measurements() {
           </div>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Delete these measurements?"
+        description={
+          pendingDelete
+            ? `The entry for ${formatDate(pendingDelete.recorded_at)} will be removed. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        busy={deleting !== null}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (pendingDelete) void remove(pendingDelete)
+        }}
+      />
     </div>
   )
 }

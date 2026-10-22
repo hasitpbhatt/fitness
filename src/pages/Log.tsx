@@ -5,14 +5,24 @@ import { useAuth } from '../lib/auth'
 import { addDays, detectTimezone, localDate } from '../lib/timezone'
 import { useEntitlement } from '../lib/useEntitlement'
 import { Button, Card } from '../components/ui'
+import { Alert, EmptyState, Skeleton } from '../components/feedback'
+import { Icon } from '../components/icons'
 import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { EditLogModal } from '../components/EditLogModal'
 import type { FitnessLog } from '../lib/types'
 
 type ActivityType = 'workout' | 'nutrition' | 'sleep' | 'water' | 'custom'
 
+const ACTIVITY_TYPES: { id: ActivityType; label: string; icon: string }[] = [
+  { id: 'workout', label: 'Workout', icon: '💪' },
+  { id: 'nutrition', label: 'Nutrition', icon: '🍎' },
+  { id: 'sleep', label: 'Sleep', icon: '😴' },
+  { id: 'water', label: 'Water', icon: '💧' },
+  { id: 'custom', label: 'Custom', icon: '✏️' },
+]
+
 export default function Log() {
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const entitlement = useEntitlement(user?.id)
   const [type, setType] = useState<ActivityType>('workout')
   const [activity, setActivity] = useState('')
@@ -30,36 +40,41 @@ export default function Log() {
   const [alreadyLogged, setAlreadyLogged] = useState(false)
   const [undoScanId, setUndoScanId] = useState<string | null>(null)
   const [undoingMeal, setUndoingMeal] = useState(false)
-  const [yesterdayLogs, setYesterdayLogs] = useState<FitnessLog[]>([])
-  const [refreshYesterday, setRefreshYesterday] = useState(0)
+  const [dayLogs, setDayLogs] = useState<FitnessLog[]>([])
+  const [logsLoading, setLogsLoading] = useState(true)
+  const [logsError, setLogsError] = useState<string | null>(null)
+  const [refresh, setRefresh] = useState(0)
   const [editingLog, setEditingLog] = useState<FitnessLog | null>(null)
 
   const timezone = detectTimezone()
   const today = localDate(timezone)
   const yesterday = addDays(today, -1)
+  const targetDate = day === 'today' ? today : yesterday
 
+  // The entries for the selected day are shown right here, so a member never
+  // has to leave this page to find out what they already logged.
   useEffect(() => {
-    if (day !== 'yesterday') return
+    if (!user) return
     let cancelled = false
-    api.get<{ logs: FitnessLog[] }>(`/fitness/logs?start=${yesterday}&end=${yesterday}`)
+    setLogsLoading(true)
+    setLogsError(null)
+    api
+      .get<{ logs: FitnessLog[] }>(`/fitness/logs?start=${targetDate}&end=${targetDate}`)
       .then((data) => {
-        if (!cancelled) setYesterdayLogs(data.logs)
+        if (cancelled) return
+        setDayLogs(data.logs)
+        setLogsLoading(false)
       })
       .catch(() => {
-        if (!cancelled) setYesterdayLogs([])
+        if (cancelled) return
+        setDayLogs([])
+        setLogsError('Could not load your entries.')
+        setLogsLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [day, yesterday, refreshYesterday])
-
-  const activityTypes: { id: ActivityType; label: string; icon: string }[] = [
-    { id: 'workout', label: 'Workout', icon: '💪' },
-    { id: 'nutrition', label: 'Nutrition', icon: '🍎' },
-    { id: 'sleep', label: 'Sleep', icon: '😴' },
-    { id: 'water', label: 'Water', icon: '💧' },
-    { id: 'custom', label: 'Custom', icon: '✏️' },
-  ]
+  }, [user, targetDate, refresh])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,7 +96,7 @@ export default function Log() {
         timezone,
       })
       setMessage({ kind: 'success', text: `Logged ${day === 'yesterday' ? 'for yesterday' : 'successfully'}!` })
-      if (day === 'yesterday') setRefreshYesterday((value) => value + 1)
+      setRefresh((value) => value + 1)
       setActivity('')
       setDurationMin('')
       setCalories('')
@@ -90,19 +105,22 @@ export default function Log() {
       setCarbs('')
       setFat('')
       setHours('')
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof ApiError && err.code === 'already_logged_today') {
-        const label = activityTypes.find((entry) => entry.id === type)?.label ?? 'That activity'
+        const label = ACTIVITY_TYPES.find((entry) => entry.id === type)?.label ?? 'That activity'
         setAlreadyLogged(true)
         setMessage({
           kind: 'error',
           text:
             day === 'yesterday'
-              ? `${label} is already logged for yesterday. Edit it in yesterday's entries below.`
-              : `${label} is already logged for today. Open the dashboard to edit it, or use "Scan food" to add a meal.`,
+              ? `${label} is already logged for yesterday. Edit it in the entries below.`
+              : `${label} is already logged for today. Edit it in the entries below, or use "Scan food" to add a meal.`,
         })
       } else {
-        setMessage({ kind: 'error', text: err?.message || 'Failed to log activity.' })
+        setMessage({
+          kind: 'error',
+          text: err instanceof ApiError ? err.message : 'Failed to log activity.',
+        })
       }
     } finally {
       setBusy(false)
@@ -116,6 +134,7 @@ export default function Log() {
       await api.post('/fitness/log/scan/undo', { scan_id: undoScanId })
       setUndoScanId(null)
       setMessage({ kind: 'success', text: "Meal removed from today's total." })
+      setRefresh((value) => value + 1)
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
         setUndoScanId(null)
@@ -128,40 +147,66 @@ export default function Log() {
     }
   }
 
+  if (authLoading) {
+    return (
+      <div className="flex flex-col gap-4" role="status" aria-label="Loading">
+        <Skeleton className="h-64 w-full" label="Loading the log form" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <Card className="mx-auto max-w-md p-8 text-center">
+        <h1 className="text-lg font-semibold text-content">Log activity</h1>
+        <p className="mt-2 text-[13px] text-muted">Sign in to track your day.</p>
+        <Link to="/login" className="btn-primary mt-4 inline-flex">
+          Sign in with Google
+        </Link>
+      </Card>
+    )
+  }
+
+  const openScan = () => {
+    if (entitlement && !entitlement.features.ai_tools) {
+      setMessage({
+        kind: 'error',
+        text: 'AI food scan is part of Plus. Ask your coach to enable access, or add the meal manually below.',
+      })
+      return
+    }
+    setScanOpen(true)
+  }
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <Card>
-        <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
-          <div>
-            <h1 className="text-lg font-semibold">Log {day === 'yesterday' ? 'Yesterday' : 'Today'}</h1>
-            <p className="text-[13px] text-muted mt-1">One entry per activity type per day.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
+          <div className="min-w-0">
+            <h1 className="text-lg font-semibold text-content">
+              Log {day === 'yesterday' ? 'Yesterday' : 'Today'}
+            </h1>
+            <p className="mt-0.5 text-[13px] text-muted">One entry per activity type per day.</p>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              if (entitlement && !entitlement.features.ai_tools) {
-                setMessage({
-                  kind: 'error',
-                  text: 'AI food scan is part of Plus. Ask your coach to enable access, or add the meal manually below.',
-                })
-                return
-              }
-              setScanOpen(true)
-            }}
-          >
+          <Button variant="secondary" size="sm" onClick={openScan}>
+            <Icon name="camera" size={16} />
             Scan food
           </Button>
         </div>
+
         <form onSubmit={handleSubmit} className="px-4 py-4">
-          <div className="mb-4 inline-flex rounded-lg border border-line bg-surface-2 p-1" role="group" aria-label="Log date">
+          <div
+            className="mb-4 inline-flex rounded-lg border border-line bg-surface-2 p-1"
+            role="group"
+            aria-label="Log date"
+          >
             {(['today', 'yesterday'] as const).map((option) => (
               <button
                 key={option}
                 type="button"
                 onClick={() => setDay(option)}
                 aria-pressed={day === option}
-                className={`min-h-[36px] rounded-md px-3 text-[12px] font-medium transition-colors ${
+                className={`tap rounded-md px-3 text-[12px] font-medium transition-colors ${
                   day === option ? 'bg-accent text-white' : 'text-muted hover:text-content'
                 }`}
               >
@@ -170,20 +215,25 @@ export default function Log() {
             ))}
           </div>
 
-          {/* Type selector */}
-          <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-            {activityTypes.map((t) => (
+          {/* Type selector - scrolls sideways on a narrow phone, and the row
+              is padded so the last option is visibly half-cut rather than
+              hiding the fact that more exists. */}
+          <div className="scroll-x scroll-x-pad mb-4">
+            {ACTIVITY_TYPES.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setType(t.id)}
-                className={`flex flex-col items-center gap-2 px-3 py-2 rounded-lg border transition-colors whitespace-nowrap ${
+                aria-pressed={type === t.id}
+                className={`flex min-h-[72px] w-[74px] flex-col items-center justify-center gap-1.5 rounded-lg border px-2 py-2 transition-colors ${
                   type === t.id
                     ? 'border-accent bg-accent/10 text-accent'
-                    : 'border-line text-muted hover:border-surface-2'
+                    : 'border-line text-muted hover:bg-surface-2 hover:text-content'
                 }`}
               >
-                <span aria-hidden="true">{t.icon}</span>
+                <span className="text-xl" aria-hidden="true">
+                  {t.icon}
+                </span>
                 <span className="text-[12px] font-medium">{t.label}</span>
               </button>
             ))}
@@ -191,11 +241,14 @@ export default function Log() {
 
           <div className="space-y-3">
             <div>
-              <label className="block text-[12px] font-medium text-content mb-1">Activity</label>
+              <label htmlFor="log-activity" className="mb-1 block text-[12px] font-medium text-content">
+                Activity
+              </label>
               <input
+                id="log-activity"
                 type="text"
                 placeholder="e.g. 30 min walk, salad, 8 hours, 500ml"
-                className="input w-full"
+                className="input"
                 value={activity}
                 onChange={(e) => setActivity(e.target.value)}
               />
@@ -204,12 +257,30 @@ export default function Log() {
             {type === 'workout' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-content mb-1">Duration (min)</label>
-                  <input type="number" className="input" value={durationMin} onChange={(e) => setDurationMin(e.target.value)} />
+                  <label htmlFor="log-duration" className="mb-1 block text-[12px] font-medium text-content">
+                    Duration (min)
+                  </label>
+                  <input
+                    id="log-duration"
+                    type="number"
+                    inputMode="numeric"
+                    className="input"
+                    value={durationMin}
+                    onChange={(e) => setDurationMin(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-content mb-1">Calories</label>
-                  <input type="number" className="input" value={calories} onChange={(e) => setCalories(e.target.value)} />
+                  <label htmlFor="log-calories" className="mb-1 block text-[12px] font-medium text-content">
+                    Calories
+                  </label>
+                  <input
+                    id="log-calories"
+                    type="number"
+                    inputMode="numeric"
+                    className="input"
+                    value={calories}
+                    onChange={(e) => setCalories(e.target.value)}
+                  />
                 </div>
               </div>
             )}
@@ -217,124 +288,182 @@ export default function Log() {
             {type === 'nutrition' && (
               <>
                 <div>
-                  <label className="block text-[12px] font-medium text-content mb-1">Calories</label>
-                  <input type="number" className="input" value={calories} onChange={(e) => setCalories(e.target.value)} />
+                  <label htmlFor="log-nutrition-calories" className="mb-1 block text-[12px] font-medium text-content">
+                    Calories
+                  </label>
+                  <input
+                    id="log-nutrition-calories"
+                    type="number"
+                    inputMode="numeric"
+                    className="input"
+                    value={calories}
+                    onChange={(e) => setCalories(e.target.value)}
+                  />
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[12px] font-medium text-content mb-1">Protein (g)</label>
-                    <input type="number" className="input" value={protein} onChange={(e) => setProtein(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium text-content mb-1">Carbs (g)</label>
-                    <input type="number" className="input" value={carbs} onChange={(e) => setCarbs(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="block text-[12px] font-medium text-content mb-1">Fat (g)</label>
-                    <input type="number" className="input" value={fat} onChange={(e) => setFat(e.target.value)} />
-                  </div>
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  {(
+                    [
+                      ['Protein (g)', protein, setProtein, 'log-protein'],
+                      ['Carbs (g)', carbs, setCarbs, 'log-carbs'],
+                      ['Fat (g)', fat, setFat, 'log-fat'],
+                    ] as const
+                  ).map(([label, value, setter, id]) => (
+                    <div key={id}>
+                      <label htmlFor={id} className="mb-1 block text-[12px] font-medium text-content">
+                        {label}
+                      </label>
+                      <input
+                        id={id}
+                        type="number"
+                        inputMode="decimal"
+                        className="input px-2"
+                        value={value}
+                        onChange={(e) => setter(e.target.value)}
+                      />
+                    </div>
+                  ))}
                 </div>
               </>
             )}
 
             {type === 'sleep' && (
               <div>
-                <label className="block text-[12px] font-medium text-content mb-1">Hours</label>
-                <input type="number" step="0.5" className="input" value={hours} onChange={(e) => setHours(e.target.value)} />
+                <label htmlFor="log-hours" className="mb-1 block text-[12px] font-medium text-content">
+                  Hours
+                </label>
+                <input
+                  id="log-hours"
+                  type="number"
+                  step="0.5"
+                  inputMode="decimal"
+                  className="input"
+                  value={hours}
+                  onChange={(e) => setHours(e.target.value)}
+                />
               </div>
             )}
 
             {type === 'water' && (
               <div>
-                <label className="block text-[12px] font-medium text-content mb-1">Water (ml)</label>
-                <input type="number" className="input" value={waterMl} onChange={(e) => setWaterMl(e.target.value)} />
+                <label htmlFor="log-water" className="mb-1 block text-[12px] font-medium text-content">
+                  Water (ml)
+                </label>
+                <input
+                  id="log-water"
+                  type="number"
+                  inputMode="numeric"
+                  className="input"
+                  value={waterMl}
+                  onChange={(e) => setWaterMl(e.target.value)}
+                />
               </div>
             )}
           </div>
 
           {message && (
-            <div className={`mt-4 flex items-center justify-between gap-3 rounded-lg p-3 text-[13px] ${
-              message.kind === 'success' ? 'text-gain bg-gain/10 border border-gain/20' : 'text-loss bg-warn/10 border border-warn/20'
-            }`}>
-              <span>{message.text}</span>
-              {alreadyLogged && day === 'today' ? (
-                <Link
-                  to="/dashboard"
-                  className="shrink-0 text-[12px] font-medium text-accent hover:underline"
-                >
-                  Open dashboard
-                </Link>
-              ) : undoScanId && (
-                <button
-                  type="button"
-                  onClick={() => void undoMeal()}
-                  disabled={undoingMeal}
-                  className="shrink-0 text-[12px] font-medium text-accent hover:underline disabled:opacity-40"
-                >
-                  {undoingMeal ? 'Undoing…' : 'Undo'}
-                </button>
-              )}
+            <div className="mt-4">
+              <Alert
+                tone={message.kind === 'success' ? 'success' : 'danger'}
+                action={
+                  alreadyLogged && day === 'today' ? (
+                    <Link to="/dashboard" className="text-[12px] font-medium text-accent hover:underline">
+                      Dashboard
+                    </Link>
+                  ) : undoScanId ? (
+                    <button
+                      type="button"
+                      onClick={() => void undoMeal()}
+                      disabled={undoingMeal}
+                      className="tap rounded px-2 text-[12px] font-medium text-accent hover:underline disabled:opacity-40"
+                    >
+                      {undoingMeal ? 'Undoing…' : 'Undo'}
+                    </button>
+                  ) : undefined
+                }
+              >
+                {message.text}
+              </Alert>
             </div>
           )}
 
-          <Button type="submit" className="w-full mt-6" disabled={busy}>
-            {busy ? 'Logging…' : 'Log Activity'}
+          <Button type="submit" className="mt-5 w-full" loading={busy}>
+            {day === 'yesterday' ? 'Log to yesterday' : 'Log activity'}
           </Button>
         </form>
       </Card>
 
-      {day === 'yesterday' && (
-        <Card>
-          <div className="border-b border-line px-4 py-3">
-            <h2 className="font-semibold text-content">Yesterday&apos;s entries</h2>
-            <p className="text-[12px] text-muted">Edit or remove an entry while it is still in the 7-day window.</p>
+      <Card>
+        <div className="border-b border-line px-4 py-3">
+          <h2 className="font-semibold text-content">
+            {day === 'yesterday' ? "Yesterday's entries" : "Today's entries"}
+          </h2>
+          <p className="mt-0.5 text-[12px] text-muted">
+            Edit or remove an entry while it is still in the 7-day window.
+          </p>
+        </div>
+
+        {logsLoading ? (
+          <div className="flex flex-col gap-2 p-4" role="status" aria-label="Loading entries">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
           </div>
-          {yesterdayLogs.length === 0 ? (
-            <p className="px-4 py-6 text-center text-[13px] text-muted">Nothing logged yesterday.</p>
-          ) : (
-            <div className="flex flex-col divide-y divide-line">
-              {yesterdayLogs.map((log) => {
-                const meta = activityTypes.find((entry) => entry.id === log.type)
-                const summary =
-                  log.calories != null
-                    ? `${log.calories.toLocaleString('en-US')} kcal`
-                    : log.water_ml != null
-                      ? `${log.water_ml.toLocaleString('en-US')} ml`
-                      : log.hours != null
-                        ? `${log.hours}h`
-                        : log.duration_min != null
-                          ? `${log.duration_min} min`
-                          : ''
-                return (
-                  <div key={log.id} className="flex items-center gap-3 px-4 py-3">
-                    <span
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-base"
-                      aria-hidden="true"
-                    >
-                      {meta?.icon ?? ''}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-medium">{meta?.label ?? log.type}</p>
-                      <p className="truncate text-[12px] text-muted">{log.activity || 'No details'}</p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {summary && <span className="num text-[13px] text-muted">{summary}</span>}
-                      <button
-                        type="button"
-                        onClick={() => setEditingLog(log)}
-                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-[12px] text-muted transition-colors hover:bg-surface-2 hover:text-content"
-                        aria-label={`Edit ${meta?.label ?? log.type} log`}
-                      >
-                        Edit
-                      </button>
-                    </div>
+        ) : logsError ? (
+          <div className="p-4">
+            <Alert tone="danger">{logsError}</Alert>
+          </div>
+        ) : dayLogs.length === 0 ? (
+          <EmptyState
+            icon="plus-circle"
+            title={day === 'yesterday' ? 'Nothing logged yesterday' : 'Nothing logged yet today'}
+            description={
+              day === 'yesterday'
+                ? 'Your streak starts with one entry — even a short one counts.'
+                : 'Your streak starts with one entry — even a short one counts.'
+            }
+          />
+        ) : (
+          <ul className="flex flex-col divide-y divide-line">
+            {dayLogs.map((log) => {
+              const meta = ACTIVITY_TYPES.find((entry) => entry.id === log.type)
+              const summary =
+                log.calories != null
+                  ? `${log.calories.toLocaleString('en-US')} kcal`
+                  : log.water_ml != null
+                    ? `${log.water_ml.toLocaleString('en-US')} ml`
+                    : log.hours != null
+                      ? `${log.hours}h`
+                      : log.duration_min != null
+                        ? `${log.duration_min} min`
+                        : ''
+              return (
+                <li key={log.id} className="flex items-center gap-3 px-4 py-3">
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-base"
+                    aria-hidden="true"
+                  >
+                    {meta?.icon ?? ''}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium text-content">{meta?.label ?? log.type}</p>
+                    <p className="truncate text-[12px] text-muted">{log.activity || 'No details'}</p>
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </Card>
-      )}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {summary && <span className="num text-[13px] text-muted">{summary}</span>}
+                    <button
+                      type="button"
+                      onClick={() => setEditingLog(log)}
+                      className="tap flex items-center justify-center rounded-md text-[12px] text-muted transition-colors hover:bg-surface-2 hover:text-content"
+                      aria-label={`Edit ${meta?.label ?? log.type} log`}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </Card>
 
       {editingLog && (
         <EditLogModal
@@ -343,7 +472,7 @@ export default function Log() {
           onClose={() => setEditingLog(null)}
           onSaved={() => {
             setEditingLog(null)
-            setRefreshYesterday((value) => value + 1)
+            setRefresh((value) => value + 1)
           }}
         />
       )}
@@ -358,6 +487,7 @@ export default function Log() {
           })
           setUndoScanId(meal.scanId)
           setType('nutrition')
+          setRefresh((value) => value + 1)
         }}
       />
     </div>

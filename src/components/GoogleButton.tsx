@@ -47,13 +47,3 @@ export function GoogleButton({
     </a>
   )
 }
-
-export function AuthDivider() {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="h-px flex-1 bg-line" />
-      <span className="text-[11px] uppercase tracking-wide text-muted">or</span>
-      <span className="h-px flex-1 bg-line" />
-    </div>
-  )
-}

@@ -21,6 +21,14 @@
   --green: #34d399;
   --red: #f87171;
   --amber: #fbbf24;
+
+  /* Layout tokens. The mobile tab bar is a fixed overlay, so every page has
+     to reserve room for it - a single source of truth beats three magic
+     numbers scattered across the CSS. */
+  --bottom-nav-h: 60px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Minimum comfortable touch target (WCAG 2.5.8 / platform HIG). */
+  --tap: 44px;
 }
 
 @layer base {
@@ -98,6 +106,58 @@
   .btn-ghost {
     @apply btn text-muted hover:text-content;
   }
+
+  /* Destructive action. Visually distinct from a neutral action so a
+     destructive tap never looks like a safe one. The token colours are raw
+     CSS variables, so the translucency is mixed explicitly. */
+  .btn-danger {
+    @apply btn text-loss;
+    border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+    background-color: color-mix(in srgb, var(--red) 12%, transparent);
+  }
+  .btn-danger:hover {
+    background-color: color-mix(in srgb, var(--red) 20%, transparent);
+  }
+
+  /* Anything a finger has to hit gets at least a 44px target. */
+  .tap {
+    min-height: var(--tap);
+    min-width: var(--tap);
+  }
+
+  /* Horizontal scrollers (activity types, filter chips). Momentum scrolling
+     plus a visible thin scrollbar so there is a hint that more exists. */
+  .scroll-x {
+    @apply flex gap-2 overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  .scroll-x > * {
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+  }
+
+  /* The last item in a horizontal scroller should not sit flush against the
+     edge - it needs room to show that it can be scrolled past. */
+  .scroll-x-pad {
+    padding-right: 1rem;
+  }
+}
+
+/* The coach is a full-height conversation. On a phone the frame has to fill
+   the space that is left under the app header, otherwise the composer - the
+   only thing the user came to touch - sits below the fold. */
+.chat-frame {
+  height: calc(100vh - 10.5rem);
+  height: calc(100dvh - 10.5rem);
+  min-height: 380px;
+}
+
+@media (min-width: 768px) {
+  .chat-frame {
+    height: calc(100vh - 7rem);
+    height: calc(100dvh - 7rem);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -140,8 +200,8 @@
   .toast-container {
     left: 1rem;
     right: 1rem;
-    /* Clear the fixed bottom tab bar (~56px) plus any safe-area inset. */
-    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    /* Clear the fixed bottom tab bar plus any safe-area inset. */
+    bottom: calc(var(--bottom-nav-h) + var(--safe-bottom) + 0.75rem);
   }
 }
 /* Meal-plan printing: keep the page light and hide app chrome. */

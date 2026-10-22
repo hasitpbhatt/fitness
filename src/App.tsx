@@ -18,10 +18,11 @@ import Onboarding from './pages/Onboarding'
 import Install from './pages/Install'
 import NotFound from './pages/NotFound'
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt'
+import { ToastProvider } from './components/feedback'
 
 export default function App() {
   return (
-    <>
+    <ToastProvider>
       <PwaUpdatePrompt />
       <Routes>
         <Route path="/" element={<Landing />} />
@@ -44,6 +45,6 @@ export default function App() {
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
-    </>
+    </ToastProvider>
   )
 }

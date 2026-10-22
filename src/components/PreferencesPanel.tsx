@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { api } from '../lib/api'
 import type { Preferences } from '../lib/types'
 import { Button, Card, Input } from './ui'
+import { ConfirmDialog } from './feedback'
 
 type Props = {
   preferences: Preferences | null
@@ -46,6 +47,7 @@ export function PreferencesPanel({ preferences, onChange }: Props) {
   const [notes, setNotes] = useState(preferences?.notes ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmForget, setConfirmForget] = useState(false)
 
   const diets = preferences?.diets ?? []
   const allergens = preferences?.allergens ?? []
@@ -197,12 +199,25 @@ export function PreferencesPanel({ preferences, onChange }: Props) {
             <Button variant="secondary" onClick={() => setEditing(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button variant="secondary" onClick={() => void forget()} disabled={busy} className="text-loss">
+            <Button variant="secondary" onClick={() => setConfirmForget(true)} disabled={busy} className="text-loss">
               Forget everything
             </Button>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmForget}
+        title="Forget everything the coach learned?"
+        description="Your diet, allergies and food preferences are removed. You can teach the coach again any time."
+        confirmLabel="Forget everything"
+        busy={busy}
+        onCancel={() => setConfirmForget(false)}
+        onConfirm={() => {
+          setConfirmForget(false)
+          void forget()
+        }}
+      />
     </Card>
   )
 }
