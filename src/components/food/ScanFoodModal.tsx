@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { ApiError, api } from '../../lib/api'
 import {
   AI_EXHAUSTED_MESSAGE,
+  AI_OUT_OF_CREDITS_MESSAGE,
   AI_UNAVAILABLE_MESSAGE,
   aiQuotaSummary,
 } from '../../lib/aiUsage'
@@ -34,6 +35,7 @@ const EMPTY_TOTALS: ScanTotals = {
 function friendlyError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     if (err.status === 429) return AI_EXHAUSTED_MESSAGE
+    if (err.code === 'out_of_credits') return AI_OUT_OF_CREDITS_MESSAGE
     if (err.status === 503) return AI_UNAVAILABLE_MESSAGE
     if (err.code === 'invalid_model_output') {
       return "The AI couldn't read that estimate. Try another photo or add a little more detail."

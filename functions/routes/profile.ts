@@ -37,11 +37,23 @@ app.get('/api/fitness/profile', async (c) => {
   let profile = await getFitnessProfile(c.env, userId)
   if (!profile?.timezone && detected) {
     await saveFitnessTimezone(c.env, userId, detected, 'auto')
-    profile = { timezone: detected, timezone_source: 'auto', onboarding_complete: false }
+    profile = {
+      timezone: detected,
+      timezone_source: 'auto',
+      onboarding_complete: false,
+      freellm_key_hash: profile?.freellm_key_hash ?? null,
+      freellm_key_updated_at: profile?.freellm_key_updated_at ?? null,
+    }
   } else if (profile?.timezone && profile.timezone_source === 'auto' && detected && detected !== profile.timezone) {
     // User moved or switched devices — refresh the unconfirmed guess.
     await saveFitnessTimezone(c.env, userId, detected, 'auto')
-    profile = { timezone: detected, timezone_source: 'auto', onboarding_complete: profile.onboarding_complete }
+    profile = {
+      timezone: detected,
+      timezone_source: 'auto',
+      onboarding_complete: profile.onboarding_complete,
+      freellm_key_hash: profile.freellm_key_hash,
+      freellm_key_updated_at: profile.freellm_key_updated_at,
+    }
   }
 
   return c.json({

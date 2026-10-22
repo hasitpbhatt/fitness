@@ -51,10 +51,14 @@ back to these.
   `0008_measurements.sql`, `0009_foods.sql`, `0010_notifications.sql`,
   `0011_coach.sql`, `0012_meal_plan_foods.sql`, `0013_onboarding.sql`,
   `0014_entitlements.sql`, and `0015_analytics.sql` exist in source, apply cleanly
-  locally, and are awaiting the remote window.
-- `FREELLM_API_KEY` is **not set**. Only Google OAuth secrets exist.
+  locally, and are awaiting the remote window. `0016_freellm_user_key.sql` is written and
+  applied locally but not yet committed.
+- Fitness has **no shared freellm service key**. Every member gets their own freellm
+  token automatically (same shared D1), so AI calls spend that member's own credits.
+  `FITNESS_DATA_KEY` (optional) encrypts those tokens at rest; `GOOGLE_CLIENT_SECRET`
+  is the fallback passphrase.
 - VAPID keys are **not set**; in-app notifications work, Web Push is deferred.
-- Source tree is green: `typecheck`, `lint`, `build`, `verify` 179/179.
+- Source tree is green: `typecheck`, `lint`, `build`, `verify` 181/181.
 - New UX exists locally: first-run goal + timezone onboarding, photo or text estimate,
   editable description + re-estimate, clarification questions, ranges, quota, manual
   fallback, timezone confirmation, macro
@@ -224,26 +228,27 @@ mandatory.
 
 ### 2. Fitness
 
-1. Set the server secret (use the `fl_` token with no connection binding; raw value is in
-   the password manager — D1 stores only a hash):
-   `npx wrangler pages secret put FREELLM_API_KEY --project-name fitness`.
+1. Optional: set the passphrase that encrypts member freellm tokens at rest.
+   `npx wrangler pages secret put FITNESS_DATA_KEY --project-name fitness`.
+   Without it, `GOOGLE_CLIENT_SECRET` is used as the fallback passphrase.
 2. Verify with `npx wrangler pages secret list --project-name fitness`.
 3. Apply `0002_fitness_profiles.sql`, `0003_scan_usage_and_unique_day.sql`,
    `0004_fitness_hardening.sql`, `0005_scan_ledger_and_welcome_slot.sql`,
    `0006_macro_targets.sql`, `0007_habits.sql`, `0008_measurements.sql`,
    `0009_foods.sql`, `0010_notifications.sql`, `0011_coach.sql`,
-   `0012_meal_plan_foods.sql`, `0013_onboarding.sql`, `0014_entitlements.sql`, and
-   `0015_analytics.sql` remotely in a short window.
-4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns and
-   `onboarding_complete`),
+   `0012_meal_plan_foods.sql`, `0013_onboarding.sql`, `0014_entitlements.sql`,
+   `0015_analytics.sql`, and `0016_freellm_user_key.sql` remotely in a short window.
+4. Verify tables/indexes/columns: `fitness_profiles` (+ macro target columns,
+   `onboarding_complete`, `freellm_key_hash`, `freellm_key_updated_at`),
    `fitness_scan_usage`, `fitness_coach_usage`, `scan_data`, `fitness_scan_ledger`,
    `fitness_habits`, `fitness_measurements`, `fitness_foods`, `fitness_notifications`,
    `fitness_notification_views`, four meal-plan food seeds (chicken breast, boiled egg,
    tofu, soya chunks), macro columns on `fitness_logs`, partial
    `idx_fitness_logs_user_date_type`, `idx_user_badges_user_code`,
    `fitness_entitlements` with existing fitness members backfilled to `plus`, active,
-   and `fitness_events` with `idx_fitness_events_name_time`,
-   `idx_fitness_events_user_time`, and `idx_fitness_events_time`.
+   `fitness_events` with `idx_fitness_events_name_time`,
+   `idx_fitness_events_user_time`, and `idx_fitness_events_time`, and
+   `idx_fitness_profiles_freellm_key`.
 5. Deploy fitness.
 6. Verify: logged-in `/api/fitness/log/today`, targets save/read, photo scan, text scan,
    re-estimate, log scan with macros, edit/delete, yesterday log, habit quick-adds and
@@ -544,6 +549,16 @@ The first release is done when:
   activity, cohort retention (weekly), per-request cost (USD), and provisioned-access counts.
   Reliability is capped to the latest 10,000 events and labels the view as sampled when capped.
   Fitness **179/179 checks**, typecheck, lint, build pass.
+- **2026-10-21 - per-member freellm tokens (no shared service key):** fitness no longer
+  calls freellm with a shared `FREELLM_API_KEY`. Every member gets their own freellm
+  API token automatically — minted on first AI use, registered in the shared
+  `freellm_api_tokens` table, and stored encrypted at rest in `fitness_profiles`
+  (AES-GCM; passphrase `FITNESS_DATA_KEY` with `GOOGLE_CLIENT_SECRET` as fallback).
+  Members never copy or paste a key, and their own freellm credits pay for their
+  scans, food search, and coach replies. A 402 from freellm now returns a clear
+  `out_of_credits` message instead of a generic failure, and the quota is refunded.
+  Added `0016_freellm_user_key.sql` plus `GET/PUT/DELETE /api/fitness/freellm-key`.
+  Fitness **181/181 checks**, typecheck, lint, build pass.
 - **Next:** deploy remains pending explicit approval. Wave 1's planned baseline batch is
   implemented; remaining partial is C-02 scheduler-based auto-expiry (deferred — lazy
   expiry already handles functional requirement). C-12 weekly photo comparison is

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AIUsageMeter } from '../components/ai/AIUsageMeter'
 import { Button, Card, Textarea } from '../components/ui'
-import { AI_COACH_LIMIT, COACH_EXHAUSTED_MESSAGE, COACH_QUOTA_NOTE, COACH_UNAVAILABLE_MESSAGE, aiExhausted } from '../lib/aiUsage'
+import { AI_COACH_LIMIT, COACH_EXHAUSTED_MESSAGE, COACH_OUT_OF_CREDITS_MESSAGE, COACH_QUOTA_NOTE, COACH_UNAVAILABLE_MESSAGE, aiExhausted } from '../lib/aiUsage'
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useEntitlement } from '../lib/useEntitlement'
@@ -112,6 +112,8 @@ export default function Coach() {
       if (err instanceof ApiError && err.status === 429) {
         setQuota({ used: AI_COACH_LIMIT, limit: AI_COACH_LIMIT })
         setError(COACH_EXHAUSTED_MESSAGE)
+      } else if (err instanceof ApiError && err.code === 'out_of_credits') {
+        setError(COACH_OUT_OF_CREDITS_MESSAGE)
       } else {
         setError(err instanceof ApiError ? err.message : 'The coach could not answer. Please try again.')
       }

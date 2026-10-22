@@ -54,6 +54,17 @@ CREATE TABLE IF NOT EXISTS freellm_email_blocks (
   created_by TEXT,
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS freellm_api_tokens (
+  id            TEXT PRIMARY KEY,
+  user_id       TEXT NOT NULL,
+  label         TEXT NOT NULL,
+  token_prefix  TEXT NOT NULL,
+  token_hash    TEXT NOT NULL UNIQUE,
+  last_used_at  INTEGER,
+  connection_id TEXT,
+  created_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_freellm_api_tokens_user ON freellm_api_tokens(user_id, created_at DESC);
 `
 
 function splitStatements(sql) {
@@ -135,6 +146,15 @@ const mf = new Miniflare(
           }),
           { headers: { 'content-type': 'application/json' } },
         )
+      }
+      if (request.url.startsWith('https://freellm.hasit.in/v1/')) {
+        // Fitness never uses a shared service key: every member call goes out
+        // with their own freellm token. The main harness has no funded
+        // member, so the gateway answers like a member with no credits.
+        return new Response(JSON.stringify({ error: { message: 'insufficient credits' } }), {
+          status: 402,
+          headers: { 'content-type': 'application/json' },
+        })
       }
       return new Response('unexpected outbound request', { status: 500 })
     },
@@ -680,8 +700,8 @@ try {
       }),
     )
     check(
-      'Plus member reaches the unconfigured scan gateway -> 503',
-      unlockedScan.status === 503 && unlockedScan.body.error === 'upstream_error',
+      'Plus member without freellm credits -> 503',
+      unlockedScan.status === 503 && unlockedScan.body.error === 'out_of_credits',
       JSON.stringify(unlockedScan.body),
     )
 
@@ -1095,7 +1115,11 @@ try {
         body: JSON.stringify({ image: 'data:image/jpeg;base64,AAAA' }),
       }),
     )
-    check('scan without API key -> 503 configured error', status === 503 && body.error === 'upstream_error', JSON.stringify(body))
+    check(
+      'scan without freellm credits -> 503 credits error',
+      status === 503 && body.error === 'out_of_credits',
+      JSON.stringify(body),
+    )
   }
   {
     const { status, body } = await json(
@@ -1115,7 +1139,11 @@ try {
         body: JSON.stringify({ description: 'rice and dal' }),
       }),
     )
-    check('text estimate without API key -> 503', status === 503 && body.error === 'upstream_error', JSON.stringify(body))
+    check(
+      'text estimate without freellm credits -> 503 credits error',
+      status === 503 && body.error === 'out_of_credits',
+      JSON.stringify(body),
+    )
   }
   {
     const { status, body } = await json(
@@ -1135,7 +1163,11 @@ try {
         body: JSON.stringify({ query: 'roti' }),
       }),
     )
-    check('AI food search without API key -> 503', status === 503 && body.error === 'upstream_error', JSON.stringify(body))
+    check(
+      'AI food search without freellm credits -> 503 credits error',
+      status === 503 && body.error === 'out_of_credits',
+      JSON.stringify(body),
+    )
   }
   {
     const { status, body } = await json(
@@ -1150,11 +1182,11 @@ try {
   {
     const quota = await json(await call('/api/fitness/coach/quota', { headers: authHeaders }))
     check(
-      'coach quota reports the unconfigured gateway without spending',
+      'coach quota reports the member token without spending',
       quota.status === 200 &&
         quota.body.quota?.used === 0 &&
         quota.body.quota?.limit === 20 &&
-        quota.body.configured === false,
+        quota.body.configured === true,
       JSON.stringify(quota.body),
     )
     const invalid = await json(
@@ -1176,14 +1208,68 @@ try {
         body: JSON.stringify({ messages: [{ role: 'user', content: 'How is my week going?' }] }),
       }),
     )
-    check('coach without API key -> 503', status === 503 && body.error === 'upstream_error', JSON.stringify(body))
+    check(
+      'coach without freellm credits -> 503',
+      status === 503 && body.error === 'out_of_credits',
+      JSON.stringify(body),
+    )
     const usage = await db
-      .prepare("SELECT COUNT(*) AS rows FROM fitness_coach_usage WHERE user_id = 'u-verify'")
+      .prepare("SELECT COALESCE(SUM(count), 0) AS spent FROM fitness_coach_usage WHERE user_id = 'u-verify'")
       .first()
     check(
-      'unconfigured coach does not spend a coach message',
-      usage?.rows === 0,
+      'unfunded coach does not spend a coach message',
+      usage?.spent === 0,
       JSON.stringify(usage),
+    )
+  }
+  {
+    // Every member gets their own freellm token automatically - no copy and paste.
+    const otherHeaders = { cookie: 'fitness_session=other-token', 'content-type': 'application/json' }
+    await db.prepare("DELETE FROM freellm_api_tokens WHERE user_id = 'u-other'").run()
+    await db.prepare("UPDATE fitness_profiles SET freellm_key_hash = NULL, freellm_key_updated_at = NULL WHERE user_id = 'u-other'").run()
+    const before = await db
+      .prepare("SELECT COUNT(*) AS rows FROM freellm_api_tokens WHERE user_id = 'u-other'")
+      .first()
+    const status = await json(
+      await call('/api/fitness/freellm-key', { method: 'PUT', headers: otherHeaders, body: JSON.stringify({}) }),
+    )
+    const token = await db
+      .prepare("SELECT token_prefix, token_hash FROM freellm_api_tokens WHERE user_id = 'u-other' AND label = 'fitness'")
+      .first()
+    const stored = await db
+      .prepare("SELECT freellm_key_hash FROM fitness_profiles WHERE user_id = 'u-other'")
+      .first()
+    const repeat = await json(await call('/api/fitness/freellm-key', { headers: otherHeaders }))
+    const tokenCount = await db
+      .prepare("SELECT COUNT(*) AS rows FROM freellm_api_tokens WHERE user_id = 'u-other'")
+      .first()
+    check(
+      'member freellm token is provisioned automatically and reused',
+      before?.rows === 0 &&
+        status.status === 200 &&
+        status.body.has_key === true &&
+        token !== null &&
+        typeof token.token_hash === 'string' &&
+        token.token_hash.length === 64 &&
+        stored?.freellm_key_hash &&
+        stored.freellm_key_hash !== token.token_hash &&
+        repeat.status === 200 &&
+        repeat.body.has_key === true &&
+        tokenCount?.rows === 1,
+      JSON.stringify({ status: status.body, token, tokenCount }),
+    )
+
+    const anon = await json(await call('/api/fitness/freellm-key'))
+    const cleared = await json(
+      await call('/api/fitness/freellm-key', { method: 'DELETE', headers: otherHeaders }),
+    )
+    const afterClear = await db
+      .prepare("SELECT COUNT(*) AS rows FROM freellm_api_tokens WHERE user_id = 'u-other'")
+      .first()
+    check(
+      'member freellm key can be revoked and needs a session',
+      anon.status === 401 && cleared.status === 200 && afterClear?.rows === 0,
+      JSON.stringify({ anon: anon.status, cleared: cleared.status, afterClear }),
     )
   }
   const scanId = 'scan-verify-1'
@@ -1311,7 +1397,7 @@ try {
       quotaBefore.status === 200 &&
         quotaBefore.body.quota?.used === 0 &&
         quotaBefore.body.quota?.limit === 20 &&
-        quotaBefore.body.configured === false,
+        quotaBefore.body.configured === true,
       JSON.stringify(quotaBefore.body),
     )
 
@@ -1473,7 +1559,7 @@ try {
           ENVIRONMENT: 'test',
           PUBLIC_ORIGIN: 'http://localhost:8788',
           ADMIN_EMAIL: '',
-          FREELLM_API_KEY: 'fl_test_scan',
+          GOOGLE_CLIENT_SECRET: 'verify-scan-secret',
           FREELLM_BASE_URL: 'https://freellm.test/v1',
         },
         outboundService: async (request) => {
@@ -1553,13 +1639,19 @@ try {
         JSON.stringify(photo.body),
       )
       const photoCall = upstreamCalls[0]
+      const memberToken = await scanDb
+        .prepare("SELECT token_hash FROM freellm_api_tokens WHERE user_id = 'u-scan' AND label = 'fitness'")
+        .first()
       check(
-        'photo scan calls the vision model through freellm with the server key',
+        'photo scan calls the vision model with the member own freellm token',
         photoCall?.url === 'https://freellm.test/v1/chat/completions' &&
-          photoCall?.authorization === 'Bearer fl_test_scan' &&
+          typeof photoCall?.authorization === 'string' &&
+          photoCall?.authorization.startsWith('Bearer fl_') &&
+          photoCall?.authorization !== 'Bearer fl_test_scan' &&
+          memberToken !== null &&
           photoCall?.body?.model === 'nemotron-3-5-super-vl' &&
           Array.isArray(photoCall?.body?.messages?.[1]?.content),
-        JSON.stringify({ url: photoCall?.url, model: photoCall?.body?.model }),
+        JSON.stringify({ url: photoCall?.url, model: photoCall?.body?.model, auth: photoCall?.authorization }),
       )
 
       scenarios.push({
@@ -2449,7 +2541,7 @@ try {
       scan?.calls >= 1 &&
         scan?.successes === 0 &&
         scan?.failures >= 1 &&
-        scan?.errors?.['503:upstream_error'] >= 1 &&
+        scan?.errors?.['503:out_of_credits'] >= 1 &&
         scan?.latency_ms?.p50 >= 0 &&
         scan?.latency_ms?.p95 >= scan?.latency_ms?.p50 &&
         (scan?.by_surface?.photo?.calls ?? 0) >= 1 &&

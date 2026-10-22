@@ -10,6 +10,7 @@ export interface Bindings {
   FREELLM_VL_MODEL?: string
   FREELLM_TEXT_MODEL?: string
   FREELLM_API_KEY?: string
+  FITNESS_DATA_KEY?: string
 }
 
 export interface PublicUser {

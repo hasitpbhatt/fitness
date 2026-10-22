@@ -6,6 +6,9 @@ export const AI_EXHAUSTED_MESSAGE =
 export const AI_UNAVAILABLE_MESSAGE =
   'AI estimates are temporarily unavailable. You can still log food manually.'
 
+export const AI_OUT_OF_CREDITS_MESSAGE =
+  'Your freellm account is out of credits. Add credits there to keep using AI estimates.'
+
 export const AI_SHARED_QUOTA_NOTE =
   'Photo scans, text estimates, and food search share one daily AI budget.'
 
@@ -16,6 +19,9 @@ export const COACH_EXHAUSTED_MESSAGE =
 
 export const COACH_UNAVAILABLE_MESSAGE =
   'The AI coach is temporarily unavailable. You can still log your day.'
+
+export const COACH_OUT_OF_CREDITS_MESSAGE =
+  'Your freellm account is out of credits. Add credits there to keep using the coach.'
 
 export const COACH_QUOTA_NOTE = 'Each question uses one of your daily coach replies.'
 

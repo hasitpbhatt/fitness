@@ -17,6 +17,7 @@ import { Hono } from 'hono'
 import { trackEvent } from '../lib/analytics'
 import { newId } from '../lib/crypto'
 import { canUseAITools } from '../lib/entitlements'
+import { resolveFreellmKey } from '../lib/freellmKey'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
 import { getSession } from '../lib/session'
 import { updateStreaks } from '../lib/streaks'
@@ -286,18 +287,19 @@ function extractJson(text: string): unknown {
 }
 
 type UpstreamOk = { ok: true; content: string; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | undefined }
-type UpstreamError = { ok: false; status: 429 | 502 | 503; message: string }
+type UpstreamError = { ok: false; status: 429 | 502 | 503; message: string; code?: string }
 
 async function callFreellm(
   env: Bindings,
   model: string,
   messages: unknown[],
   maxTokens: number,
+  userKey?: string | null,
 ): Promise<UpstreamOk | UpstreamError> {
-  const key = env.FREELLM_API_KEY
-  if (!key) {
+  if (!userKey) {
     return { ok: false, status: 503, message: 'AI meal estimates are not set up yet.' }
   }
+  const key = userKey
   const base = (env.FREELLM_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
 
   try {
@@ -310,7 +312,15 @@ async function callFreellm(
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).slice(0, 300)
       console.error('[scan] freellm returned', response.status, model, detail)
-      if (response.status === 402 || response.status === 429) {
+      if (response.status === 402) {
+        return {
+          ok: false,
+          status: 503,
+          message: 'Your freellm account is out of credits. Add credits to keep using AI estimates.',
+          code: 'out_of_credits',
+        }
+      }
+      if (response.status === 429) {
         return {
           ok: false,
           status: 429,
@@ -318,7 +328,11 @@ async function callFreellm(
         }
       }
       if (response.status === 401 || response.status === 403) {
-        return { ok: false, status: 503, message: 'AI meal estimates are not set up correctly.' }
+        return {
+          ok: false,
+          status: 503,
+          message: 'Your freellm account cannot use this model yet. Check your tier or credits.',
+        }
       }
       return { ok: false, status: 502, message: 'The model could not process that request. Try again.' }
     }
@@ -415,10 +429,11 @@ app.get('/api/fitness/scan/quota', async (c) => {
     .bind(session.userId, date)
     .first<{ count: number }>()
   const used = Math.min(row?.count ?? 0, SCANS_PER_DAY)
+  const memberKey = await resolveFreellmKey(c.env, session.userId)
   return c.json({
     quota: { used, limit: SCANS_PER_DAY },
     remaining: SCANS_PER_DAY - used,
-    configured: Boolean(c.env.FREELLM_API_KEY),
+    configured: Boolean(memberKey),
     date,
   })
 })
@@ -440,7 +455,9 @@ app.post('/api/fitness/scan', async (c) => {
       400,
     )
   }
-  if (!c.env.FREELLM_API_KEY) {
+  // The member's own freellm token pays for the call.
+  const memberKey = await resolveFreellmKey(c.env, session.userId)
+  if (!memberKey) {
     return c.json({ error: 'upstream_error', message: 'AI meal estimates are not set up yet.' }, 503)
   }
 
@@ -473,10 +490,13 @@ app.post('/api/fitness/scan', async (c) => {
     },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 1200)
+  const upstream = await callFreellm(c.env, model, messages, 1200, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
-    return c.json({ error: 'upstream_error', message: upstream.message }, upstream.status)
+    return c.json(
+      { error: upstream.code ?? 'upstream_error', message: upstream.message },
+      upstream.status,
+    )
   }
 
   const result = normalizeResult(extractJson(upstream.content), scanId, model)
@@ -507,7 +527,9 @@ app.post('/api/fitness/scan/text', async (c) => {
       400,
     )
   }
-  if (!c.env.FREELLM_API_KEY) {
+  // The member's own freellm token pays for the call.
+  const memberKey = await resolveFreellmKey(c.env, session.userId)
+  if (!memberKey) {
     return c.json({ error: 'upstream_error', message: 'AI meal estimates are not set up yet.' }, 503)
   }
 
@@ -534,10 +556,13 @@ app.post('/api/fitness/scan/text', async (c) => {
     },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 1200)
+  const upstream = await callFreellm(c.env, model, messages, 1200, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
-    return c.json({ error: 'upstream_error', message: upstream.message }, upstream.status)
+    return c.json(
+      { error: upstream.code ?? 'upstream_error', message: upstream.message },
+      upstream.status,
+    )
   }
 
   const result = normalizeResult(extractJson(upstream.content), scanId, model, description)
@@ -568,7 +593,9 @@ app.post('/api/fitness/scan/suggest', async (c) => {
       400,
     )
   }
-  if (!c.env.FREELLM_API_KEY) {
+  // The member's own freellm token pays for the call.
+  const memberKey = await resolveFreellmKey(c.env, session.userId)
+  if (!memberKey) {
     return c.json({ error: 'upstream_error', message: 'AI food search is not set up yet.' }, 503)
   }
 
@@ -591,10 +618,13 @@ app.post('/api/fitness/scan/suggest', async (c) => {
     { role: 'user', content: `Food query: ${query}\n\nReturn 3-5 options with a typical portion and its nutrition.` },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 900)
+  const upstream = await callFreellm(c.env, model, messages, 900, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
-    return c.json({ error: 'upstream_error', message: upstream.message }, upstream.status)
+    return c.json(
+      { error: upstream.code ?? 'upstream_error', message: upstream.message },
+      upstream.status,
+    )
   }
 
   const options = normalizeFoodOptions(extractJson(upstream.content))
@@ -643,7 +673,9 @@ app.post('/api/fitness/scan/refine', async (c) => {
   if (!current || current.items.length === 0) {
     return c.json({ error: 'invalid_scan', message: 'The current estimate is missing or invalid.' }, 400)
   }
-  if (!c.env.FREELLM_API_KEY) {
+  // The member's own freellm token pays for the call.
+  const memberKey = await resolveFreellmKey(c.env, session.userId)
+  if (!memberKey) {
     return c.json({ error: 'upstream_error', message: 'AI meal estimates are not set up yet.' }, 503)
   }
 
@@ -676,10 +708,13 @@ app.post('/api/fitness/scan/refine', async (c) => {
     { role: 'user', content: userPrompt },
   ]
 
-  const upstream = await callFreellm(c.env, model, messages, 1200)
+  const upstream = await callFreellm(c.env, model, messages, 1200, memberKey)
   if (!upstream.ok) {
     await refundScanQuota(c.env, session.userId, date)
-    return c.json({ error: 'upstream_error', message: upstream.message }, upstream.status)
+    return c.json(
+      { error: upstream.code ?? 'upstream_error', message: upstream.message },
+      upstream.status,
+    )
   }
 
   const updated = normalizeResult(extractJson(upstream.content), scanId, model, description || current.description)

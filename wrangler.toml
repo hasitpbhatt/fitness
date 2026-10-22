@@ -28,4 +28,8 @@ FREELLM_TEXT_MODEL = "nemotron-3-ultra-550b-a55b"
 # Secrets (set via `wrangler pages secret put <NAME>`, or .dev.vars locally):
 #   GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET — OAuth
 #   ADMIN_EMAIL — admin role auto-grant on signup
-#   FREELLM_API_KEY — server-side key for photo calorie scanning
+#   FITNESS_DATA_KEY — passphrase that encrypts member freellm tokens at rest
+#                       (falls back to GOOGLE_CLIENT_SECRET when unset)
+#
+# NOTE: fitness has no shared freellm service key. Every member call uses that
+# member's own freellm token, so their own credits are spent.

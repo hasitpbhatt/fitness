@@ -6,6 +6,7 @@
 import { Hono } from 'hono'
 import { trackEvent } from '../lib/analytics'
 import { canUseAITools } from '../lib/entitlements'
+import { resolveFreellmKey } from '../lib/freellmKey'
 import { getFitnessProfile, resolveTimezone } from '../lib/profile'
 import { getSession } from '../lib/session'
 import { addDays, localDate, quotaDay } from '../lib/time'
@@ -223,9 +224,10 @@ async function loadContext(env: Bindings, userId: string, today: string, timezon
 async function callCoach(
   env: Bindings,
   messages: Array<{ role: string; content: string }>,
+  userKey?: string | null,
 ): Promise<UpstreamResult> {
-  const key = env.FREELLM_API_KEY
-  if (!key) return { ok: false, status: 503, error: 'not_configured', message: COACH_UNAVAILABLE_MESSAGE }
+  if (!userKey) return { ok: false, status: 503, error: 'not_configured', message: COACH_UNAVAILABLE_MESSAGE }
+  const key = userKey
   const base = (env.FREELLM_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, '')
   const model = env.FREELLM_TEXT_MODEL ?? DEFAULT_TEXT_MODEL
 
@@ -239,15 +241,23 @@ async function callCoach(
     if (!response.ok) {
       const detail = (await response.text().catch(() => '')).slice(0, 300)
       console.error('[coach] freellm returned', response.status, model, detail)
+      if (response.status === 402) {
+        return {
+          ok: false,
+          status: 503,
+          error: 'out_of_credits',
+          message: 'Your freellm account is out of credits. Add credits to keep using the coach.',
+        }
+      }
       if (response.status === 401 || response.status === 403) {
         return {
           ok: false,
           status: 503,
           error: 'upstream_auth',
-          message: 'The AI coach is not set up correctly.',
+          message: 'Your freellm account cannot use this model yet. Check your tier or credits.',
         }
       }
-      if (response.status === 402 || response.status === 429) {
+      if (response.status === 429) {
         return {
           ok: false,
           status: 502,
@@ -305,10 +315,11 @@ app.get('/api/fitness/coach/quota', async (c) => {
     .bind(session.userId, date)
     .first<{ count: number }>()
   const used = Math.min(row?.count ?? 0, COACH_MESSAGES_PER_DAY)
+  const memberKey = await resolveFreellmKey(c.env, session.userId)
   return c.json({
     quota: { used, limit: COACH_MESSAGES_PER_DAY },
     remaining: COACH_MESSAGES_PER_DAY - used,
-    configured: Boolean(c.env.FREELLM_API_KEY),
+    configured: Boolean(memberKey),
     date,
   })
 })
@@ -332,7 +343,8 @@ app.post('/api/fitness/coach', async (c) => {
     )
   }
 
-  if (!c.env.FREELLM_API_KEY) {
+  const memberKey = await resolveFreellmKey(c.env, session.userId)
+  if (!memberKey) {
     return c.json({ error: 'upstream_error', message: COACH_UNAVAILABLE_MESSAGE }, 503)
   }
 
@@ -360,7 +372,7 @@ app.post('/api/fitness/coach', async (c) => {
     ...history,
   ]
 
-  const result = await callCoach(c.env, messages)
+  const result = await callCoach(c.env, messages, memberKey)
   if (!result.ok) {
     await refundCoachQuota(c.env, session.userId, date)
     return c.json({ error: result.error, message: result.message, quota }, result.status)

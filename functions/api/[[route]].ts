@@ -7,6 +7,7 @@ import coachRoutes from '../routes/coach'
 import entitlementRoutes from '../routes/entitlements'
 import fitnessRoutes from '../routes/fitness'
 import foodRoutes from '../routes/foods'
+import freellmKeyRoutes from '../routes/freellmKey'
 import habitRoutes from '../routes/habits'
 import mealPlanRoutes from '../routes/mealPlan'
 import measurementRoutes from '../routes/measurements'
@@ -57,6 +58,7 @@ app.route('/', coachRoutes)
 app.route('/', entitlementRoutes)
 app.route('/', fitnessRoutes)
 app.route('/', foodRoutes)
+app.route('/', freellmKeyRoutes)
 app.route('/', habitRoutes)
 app.route('/', mealPlanRoutes)
 app.route('/', measurementRoutes)
