@@ -1,9 +1,11 @@
 import { NavLink } from 'react-router-dom'
 import { Icon, type IconName } from '../icons'
+import { useLocale } from '../../i18n'
+import type { TranslationKey } from '../../i18n/en'
 
 type NavItem = {
   to: string
-  label: string
+  labelKey: TranslationKey
   icon: IconName
   primary?: boolean
 }
@@ -11,14 +13,15 @@ type NavItem = {
 // Five targets, and the one thing you do most often (log) is the physical
 // centre of the bar where the thumb already rests.
 const navItems: NavItem[] = [
-  { to: '/dashboard', label: 'Home', icon: 'home' },
-  { to: '/coach', label: 'Coach', icon: 'chat' },
-  { to: '/log', label: 'Log', icon: 'plus-circle', primary: true },
-  { to: '/achievements', label: 'Badges', icon: 'trophy' },
-  { to: '/leaderboard', label: 'Rank', icon: 'bar-chart' },
+  { to: '/dashboard', labelKey: 'nav.home', icon: 'home' },
+  { to: '/coach', labelKey: 'nav.coach', icon: 'chat' },
+  { to: '/log', labelKey: 'nav.log', icon: 'plus-circle', primary: true },
+  { to: '/achievements', labelKey: 'nav.achievements', icon: 'trophy' },
+  { to: '/leaderboard', labelKey: 'nav.rank', icon: 'bar-chart' },
 ]
 
 export function MobileBottomNav() {
+  const { t } = useLocale()
   return (
     <nav
       aria-label="Primary"
@@ -49,12 +52,12 @@ export function MobileBottomNav() {
                   >
                     <Icon name={item.icon} size={22} strokeWidth={2.2} />
                   </span>
-                  <span className={isActive ? 'text-accent' : 'text-muted'}>{item.label}</span>
+                  <span className={isActive ? 'text-accent' : 'text-muted'}>{t(item.labelKey)}</span>
                 </>
               ) : (
                 <>
                   <Icon name={item.icon} size={22} strokeWidth={isActive ? 2.2 : 1.8} />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey)}</span>
                 </>
               )
             }

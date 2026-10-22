@@ -2,25 +2,27 @@ import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon, type IconName } from '../icons'
 import { useModalFocus } from '../../lib/useModalFocus'
+import { LOCALES, useLocale } from '../../i18n'
+import type { TranslationKey } from '../../i18n/en'
 
-type MenuItem = { to: string; label: string; icon: IconName }
+type MenuItem = { to: string; labelKey: TranslationKey; icon: IconName }
 
 const memberItems: MenuItem[] = [
-  { to: '/dashboard', label: 'Dashboard', icon: 'home' },
-  { to: '/coach', label: 'AI coach', icon: 'chat' },
-  { to: '/log', label: 'Log activity', icon: 'plus-circle' },
-  { to: '/foods', label: 'Foods', icon: 'utensils' },
-  { to: '/meal-plan', label: 'Meal plan', icon: 'book' },
-  { to: '/measurements', label: 'Measurements', icon: 'scale' },
-  { to: '/achievements', label: 'Achievements', icon: 'trophy' },
-  { to: '/leaderboard', label: 'Leaderboard', icon: 'bar-chart' },
+  { to: '/dashboard', labelKey: 'nav.dashboard', icon: 'home' },
+  { to: '/coach', labelKey: 'nav.coach', icon: 'chat' },
+  { to: '/log', labelKey: 'nav.log', icon: 'plus-circle' },
+  { to: '/foods', labelKey: 'nav.foods', icon: 'utensils' },
+  { to: '/meal-plan', labelKey: 'nav.mealPlan', icon: 'book' },
+  { to: '/measurements', labelKey: 'nav.measurements', icon: 'scale' },
+  { to: '/achievements', labelKey: 'nav.achievements', icon: 'trophy' },
+  { to: '/leaderboard', labelKey: 'nav.leaderboard', icon: 'bar-chart' },
 ]
 
 const adminItems: MenuItem[] = [
-  { to: '/admin/members', label: 'Members', icon: 'user' },
-  { to: '/admin/access', label: 'Access', icon: 'lock' },
-  { to: '/admin/analytics', label: 'Analytics', icon: 'bar-chart' },
-  { to: '/admin/notifications', label: 'Notifications', icon: 'bell' },
+  { to: '/admin/members', labelKey: 'nav.members', icon: 'user' },
+  { to: '/admin/access', labelKey: 'nav.access', icon: 'lock' },
+  { to: '/admin/analytics', labelKey: 'nav.analytics', icon: 'bar-chart' },
+  { to: '/admin/notifications', labelKey: 'nav.notifications', icon: 'bell' },
 ]
 
 export function MobileMenu({
@@ -37,6 +39,7 @@ export function MobileMenu({
   onSignOut?: () => void
 }) {
   const panelRef = useRef<HTMLDivElement>(null)
+  const { t, locale, setLocale } = useLocale()
   useModalFocus(open, panelRef, onClose)
 
   if (!open) return null
@@ -49,14 +52,14 @@ export function MobileMenu({
         type="button"
         className="absolute inset-0 h-full w-full cursor-default bg-black/60"
         onClick={onClose}
-        aria-label="Close menu"
+        aria-label={t('nav.closeMenu')}
         tabIndex={-1}
       />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-label="Menu"
+        aria-label={t('nav.menuTitle')}
         tabIndex={-1}
         className="absolute inset-y-0 right-0 flex w-[min(20rem,85vw)] flex-col border-l border-line bg-bg"
       >
@@ -69,13 +72,13 @@ export function MobileMenu({
             type="button"
             onClick={onClose}
             className="tap flex items-center justify-center rounded-lg text-muted hover:bg-surface-2 hover:text-content"
-            aria-label="Close menu"
+            aria-label={t('nav.closeMenu')}
           >
             <Icon name="close" size={22} />
           </button>
         </div>
 
-        <nav aria-label="All pages" className="min-h-0 flex-1 overflow-y-auto p-2">
+        <nav aria-label={t('nav.menuTitle')} className="min-h-0 flex-1 overflow-y-auto p-2">
           <ul className="flex flex-col">
             {items.map((item) => (
               <li key={item.to}>
@@ -87,7 +90,7 @@ export function MobileMenu({
                   <span className="text-muted" aria-hidden="true">
                     <Icon name={item.icon} size={19} />
                   </span>
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
               </li>
             ))}
@@ -100,11 +103,36 @@ export function MobileMenu({
                 <span className="text-muted" aria-hidden="true">
                   <Icon name="download" size={19} />
                 </span>
-                Install app
+                {t('nav.install')}
               </Link>
             </li>
           </ul>
         </nav>
+
+        {/* Language. A person who cannot read the app cannot use it, so this
+            is a first-class control, not buried in settings. */}
+        <div className="border-t border-line p-3">
+          <p className="mb-1.5 px-1 text-[11px] uppercase tracking-wide text-muted">
+            {t('nav.language')}
+          </p>
+          <div className="grid grid-cols-3 gap-1.5" role="group" aria-label={t('nav.language')}>
+            {LOCALES.map((option) => (
+              <button
+                key={option.code}
+                type="button"
+                onClick={() => setLocale(option.code)}
+                aria-pressed={locale === option.code}
+                className={`min-h-[40px] rounded-lg border px-1 text-[13px] font-medium transition-colors ${
+                  locale === option.code
+                    ? 'border-accent bg-accent/10 text-accent'
+                    : 'border-line text-muted hover:bg-surface-2 hover:text-content'
+                }`}
+              >
+                {option.native}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {onSignOut && (
           <div className="border-t border-line p-2">
@@ -116,7 +144,7 @@ export function MobileMenu({
               <span className="text-muted" aria-hidden="true">
                 <Icon name="logout" size={19} />
               </span>
-              Sign out
+              {t('nav.signOut')}
             </button>
           </div>
         )}

@@ -2425,7 +2425,7 @@ try {
       JSON.stringify(invalidDiet.body),
     )
 
-    const veg = await json(await call('/api/fitness/meal-plan?diet=veg', { headers: authHeaders }))
+    const veg = await json(await call('/api/fitness/meal-plan?diet=vegetarian', { headers: authHeaders }))
     const vegDays = veg.body.days ?? []
     const vegNames = vegDays.flatMap((day) => day.meals.flatMap((meal) => meal.items.map((item) => item.name)))
     const vegCaloriesNearby = vegDays.every(
@@ -2466,7 +2466,7 @@ try {
       JSON.stringify({ total: firstDay?.totals, mealSum }),
     )
 
-    const nonveg = await json(await call('/api/fitness/meal-plan?diet=nonveg', { headers: authHeaders }))
+    const nonveg = await json(await call('/api/fitness/meal-plan?diet=non-vegetarian', { headers: authHeaders }))
     const nonvegDays = nonveg.body.days ?? []
     const nonvegNames = nonvegDays.flatMap((day) =>
       day.meals.flatMap((meal) => meal.items.map((item) => item.name)),
@@ -2477,7 +2477,7 @@ try {
     check(
       'non-vegetarian plan swaps in chicken or eggs',
       nonveg.status === 200 &&
-        nonveg.body.diet === 'nonveg' &&
+        nonveg.body.diet === 'non-vegetarian' &&
         nonvegNames.some((name) => /chicken|egg/i.test(name)) &&
         nonvegCaloriesNearby &&
         nonveg.body.average_totals?.protein_g >= 130,

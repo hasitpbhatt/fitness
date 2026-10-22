@@ -1,4 +1,5 @@
 import { Button, Card } from '../ui'
+import { useLocale } from '../../i18n'
 import type { MacroTargets, MacroTotals } from '../../lib/types'
 
 type Props = {
@@ -25,19 +26,23 @@ function formatValue(value: number, unit: string) {
 }
 
 export function MacroBars({ totals, targets, onEditTargets }: Props) {
+  const { t } = useLocale()
   const hasTargets = targets !== null && ROWS.some((row) => (targets[row.targetKey] ?? 0) > 0)
+  const fiber = targets?.fiber_target_g ?? null
+  const water = targets?.water_target_ml ?? null
+  const exercise = targets?.exercise_target_min ?? null
 
   return (
     <Card>
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div>
-          <h2 className="font-semibold text-content">Nutrition today</h2>
+          <h2 className="font-semibold text-content">{t('dash.nutritionToday')}</h2>
           <p className="text-[12px] text-muted">
-            {hasTargets ? 'Progress against your daily targets.' : 'Set targets to track your macros.'}
+            {hasTargets ? t('dash.progressAgainstTargets') : t('dash.setTargetsHint')}
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={onEditTargets}>
-          {hasTargets ? 'Edit targets' : 'Set targets'}
+          {hasTargets ? t('dash.editTargets') : t('dash.setTargets')}
         </Button>
       </div>
 
@@ -79,6 +84,28 @@ export function MacroBars({ totals, targets, onEditTargets }: Props) {
           )
         })}
       </div>
+
+      {/* The rest of what the app worked out for the member: fibre, water and
+          how much exercise the week needs. */}
+      {(fiber || water || exercise) && (
+        <div className="flex flex-wrap gap-2 border-t border-line px-4 py-3">
+          {fiber != null && fiber > 0 && (
+            <span className="rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] text-muted">
+              Fibre <span className="num font-medium text-content">{fiber} g</span> / day
+            </span>
+          )}
+          {water != null && water > 0 && (
+            <span className="rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] text-muted">
+              Water <span className="num font-medium text-content">{water.toLocaleString('en-US')} ml</span> / day
+            </span>
+          )}
+          {exercise != null && exercise > 0 && (
+            <span className="rounded-full border border-line bg-surface-2 px-2.5 py-1 text-[11px] text-muted">
+              Exercise <span className="num font-medium text-content">{exercise} min</span> / week
+            </span>
+          )}
+        </div>
+      )}
     </Card>
   )
 }

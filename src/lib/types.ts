@@ -108,6 +108,9 @@ export type MacroTargets = {
   protein_target_g: number | null
   carbs_target_g: number | null
   fat_target_g: number | null
+  fiber_target_g?: number | null
+  water_target_ml?: number | null
+  exercise_target_min?: number | null
 }
 
 export type MacroTotals = {

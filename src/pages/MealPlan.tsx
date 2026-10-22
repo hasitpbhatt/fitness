@@ -2,10 +2,18 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Button, Card } from '../components/ui'
 import { Alert } from '../components/feedback'
+import { Icon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 
-type Diet = 'veg' | 'nonveg'
+type Diet = 'vegetarian' | 'eggetarian' | 'vegan' | 'non-vegetarian'
+
+const DIETS: Array<{ value: Diet; label: string; short: string }> = [
+  { value: 'vegetarian', label: 'Vegetarian', short: 'Veg' },
+  { value: 'eggetarian', label: 'Eggetarian', short: 'Egg' },
+  { value: 'vegan', label: 'Vegan', short: 'Vegan' },
+  { value: 'non-vegetarian', label: 'Non-vegetarian', short: 'Non-veg' },
+]
 
 type PlanItem = {
   name: string
@@ -43,6 +51,7 @@ type PlanDay = {
 
 type MealPlan = {
   diet: Diet
+  diet_label: string
   date: string
   timezone: string
   target_calories: number
@@ -51,6 +60,7 @@ type MealPlan = {
   average_totals: Pick<Totals, 'calories' | 'protein_g'>
   days: PlanDay[]
   notes: string[]
+  adjustments: string[]
 }
 
 function MealCard({ day }: { day: PlanDay }) {
@@ -107,7 +117,7 @@ function MealCard({ day }: { day: PlanDay }) {
 
 export default function MealPlan() {
   const { user, loading } = useAuth()
-  const [diet, setDiet] = useState<Diet>('veg')
+  const [diet, setDiet] = useState<Diet>('vegetarian')
   const [plan, setPlan] = useState<MealPlan | null>(null)
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -175,45 +185,59 @@ export default function MealPlan() {
         <h1 className="text-xl font-semibold">fitness — 7-day meal plan</h1>
         {plan && (
           <p className="mt-1 text-[12px] text-muted">
-            {plan.diet === 'veg' ? 'Vegetarian' : 'Non-vegetarian'} · target {plan.target_calories} kcal ·{' '}
-            {plan.target_protein_g} g protein
+            {plan.diet_label} · target {plan.target_calories} kcal · {plan.target_protein_g} g protein
           </p>
         )}
       </div>
 
-      <div className="no-print flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Meal plan</h1>
-          <p className="mt-1 text-[13px] text-muted">
-            A simple 7-day Indian plan, scaled toward your calorie and protein targets.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-lg border border-line bg-surface p-0.5" role="group" aria-label="Diet">
-            <button
-              type="button"
-              aria-pressed={diet === 'veg'}
-              onClick={() => chooseDiet('veg')}
-              className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                diet === 'veg' ? 'bg-accent text-white' : 'text-muted hover:text-content'
-              }`}
-            >
-              Vegetarian
-            </button>
-            <button
-              type="button"
-              aria-pressed={diet === 'nonveg'}
-              onClick={() => chooseDiet('nonveg')}
-              className={`rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors ${
-                diet === 'nonveg' ? 'bg-accent text-white' : 'text-muted hover:text-content'
-              }`}
-            >
-              Non-vegetarian
-            </button>
+      <div className="no-print flex flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-content">Meal plan</h1>
+            <p className="mt-1 text-[13px] text-muted">
+              A simple 7-day Indian plan, scaled toward your calorie and protein targets.
+            </p>
           </div>
           <Button variant="secondary" size="sm" onClick={() => window.print()} disabled={!plan || fetching}>
+            <Icon name="printer" size={16} />
             Print / save PDF
           </Button>
+        </div>
+
+        {/* Diet selector. Four options, and the one that matches what the
+            member told their coach is the one that is actually served. */}
+        <div className="flex flex-col gap-2">
+          <div
+            className="scroll-x scroll-x-pad"
+            role="group"
+            aria-label="Diet"
+          >
+            {DIETS.map((option) => {
+              const active = plan ? plan.diet === option.value : diet === option.value
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => chooseDiet(option.value)}
+                  className={`min-h-[40px] rounded-lg border px-3 text-[12px] font-medium transition-colors ${
+                    active
+                      ? 'border-accent bg-accent/10 text-accent'
+                      : 'border-line text-muted hover:bg-surface-2 hover:text-content'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[11px] text-muted">
+            Not right?{' '}
+            <Link to="/coach" className="text-accent hover:underline">
+              Tell your coach what you like or avoid
+            </Link>{' '}
+            and the plan follows.
+          </p>
         </div>
       </div>
 
@@ -255,10 +279,26 @@ export default function MealPlan() {
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted">Plan</p>
-                <p className="mt-0.5 text-[14px] font-medium">{plan.diet === 'veg' ? 'Vegetarian' : 'Non-vegetarian'}</p>
+                <p className="mt-0.5 text-[14px] font-medium text-content">{plan.diet_label}</p>
                 <p className="text-[12px] text-muted">7 days from {plan.days[0]?.date_label}</p>
               </div>
             </div>
+
+            {plan.adjustments.length > 0 && (
+              <div className="mt-3 border-t border-line pt-3">
+                <p className="text-[11px] uppercase tracking-wide text-muted">Adapted to you</p>
+                <ul className="mt-1.5 space-y-1">
+                  {plan.adjustments.map((adjustment) => (
+                    <li key={adjustment} className="flex gap-2 text-[12px] text-muted">
+                      <span className="text-accent" aria-hidden="true">
+                        •
+                      </span>
+                      <span>{adjustment}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {plan.uses_defaults && (
               <p className="mt-3 border-t border-line pt-3 text-[12px] text-warn">

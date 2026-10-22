@@ -5,6 +5,13 @@ import { newId } from '../lib/crypto'
 import { resolveTimezone } from '../lib/profile'
 import { updateStreaks } from '../lib/streaks'
 import { addDays, localDate, weekEnd, weekStart } from '../lib/time'
+import {
+  calculateTargets,
+  type ActivityLevel,
+  type BodyProfile,
+  type GoalType,
+  type Sex,
+} from '../lib/targets'
 import type { Bindings } from '../lib/types'
 
 const app = new Hono<{ Bindings: Bindings }>()
@@ -85,6 +92,9 @@ function targetValues(row: Record<string, unknown> | null) {
     protein_target_g: (row?.protein_target_g as number | null | undefined) ?? null,
     carbs_target_g: (row?.carbs_target_g as number | null | undefined) ?? null,
     fat_target_g: (row?.fat_target_g as number | null | undefined) ?? null,
+    fiber_target_g: (row?.fiber_target_g as number | null | undefined) ?? null,
+    water_target_ml: (row?.water_target_ml as number | null | undefined) ?? null,
+    exercise_target_min: (row?.exercise_target_min as number | null | undefined) ?? null,
   }
 }
 
@@ -117,7 +127,7 @@ app.get('/api/fitness/log/today', async (c) => {
       'SELECT * FROM fitness_logs WHERE user_id = ? AND recorded_at = ? ORDER BY created_at DESC'
     ).bind(session.userId, today).all(),
     c.env.DB.prepare(
-      'SELECT calorie_target, protein_target_g, carbs_target_g, fat_target_g FROM fitness_profiles WHERE user_id = ?',
+      'SELECT calorie_target, protein_target_g, carbs_target_g, fat_target_g, fiber_target_g, water_target_ml, exercise_target_min FROM fitness_profiles WHERE user_id = ?',
     ).bind(session.userId).first(),
   ])
   return c.json({
@@ -357,7 +367,7 @@ app.get('/api/fitness/targets', async (c) => {
   const session = await getSession(c.env.fitness_sessions, c.req.header('cookie'))
   if (!session) return c.json({ error: 'unauthorized' }, 401)
   const row = await c.env.DB.prepare(
-    'SELECT calorie_target, protein_target_g, carbs_target_g, fat_target_g FROM fitness_profiles WHERE user_id = ?',
+    'SELECT calorie_target, protein_target_g, carbs_target_g, fat_target_g, fiber_target_g, water_target_ml, exercise_target_min FROM fitness_profiles WHERE user_id = ?',
   )
     .bind(session.userId)
     .first()
@@ -403,11 +413,150 @@ app.put('/api/fitness/targets', async (c) => {
     )
     .run()
 
+  // Keep the "Eat well" focus goal in step with the calorie target. The two
+  // are the same number, so they must never disagree on the dashboard.
+  if (targets.calorie_target != null) {
+    await c.env.DB.prepare(
+      `UPDATE fitness_goals
+       SET target = ?, updated_at = ?
+       WHERE user_id = ? AND type = 'nutrition' AND period = 'day'`,
+    )
+      .bind(targets.calorie_target, now, session.userId)
+      .run()
+  }
+
+  return c.json({ targets })
+})
+
+const GOAL_TYPES: GoalType[] = ['lose', 'maintain', 'gain']
+const SEXES: Sex[] = ['female', 'male']
+const ACTIVITY_LEVELS: ActivityLevel[] = ['sedentary', 'light', 'moderate', 'active', 'athlete']
+
+function readBodyProfile(raw: unknown): BodyProfile | null {
+  if (!raw || typeof raw !== 'object') return null
+  const body = raw as Record<string, unknown>
+  const goalType = body.goal_type
+  const sex = body.sex
+  const activity = body.activity_level
+  const birthYear = Number(body.birth_year)
+  const height = Number(body.height_cm)
+  const weight = Number(body.weight_kg)
+  if (!GOAL_TYPES.includes(goalType as GoalType)) return null
+  if (!SEXES.includes(sex as Sex)) return null
+  if (!ACTIVITY_LEVELS.includes(activity as ActivityLevel)) return null
+  if (!Number.isFinite(birthYear) || !Number.isFinite(height) || !Number.isFinite(weight)) return null
+  return {
+    goal_type: goalType as GoalType,
+    sex: sex as Sex,
+    birth_year: Math.round(birthYear),
+    height_cm: height,
+    weight_kg: weight,
+    activity_level: activity as ActivityLevel,
+  }
+}
+
+/**
+ * Work out the daily targets from a goal and a body profile. This does not
+ * write anything - the app shows the member the numbers before they commit.
+ */
+app.post('/api/fitness/targets/calculate', async (c) => {
+  const session = await getSession(c.env.fitness_sessions, c.req.header('cookie'))
+  if (!session) return c.json({ error: 'unauthorized' }, 401)
+
+  const body = await c.req.json<{ profile?: unknown }>().catch(() => null)
+  const profile = readBodyProfile(body?.profile)
+  if (!profile) {
+    return c.json({ error: 'invalid_profile', message: 'Send a goal, sex, birth year, height, weight and activity level.' }, 400)
+  }
+
+  const targets = calculateTargets(profile)
+  if (!targets) {
+    return c.json({ error: 'invalid_profile', message: 'Those numbers are outside the range we can work with.' }, 400)
+  }
+  return c.json({ targets })
+})
+
+/**
+ * Save the body profile and the targets derived from it. The member can
+ * override any target afterwards.
+ */
+app.put('/api/fitness/body-profile', async (c) => {
+  const session = await getSession(c.env.fitness_sessions, c.req.header('cookie'))
+  if (!session) return c.json({ error: 'unauthorized' }, 401)
+
+  const body = await c.req.json<{ profile?: unknown }>().catch(() => null)
+  const profile = readBodyProfile(body?.profile)
+  if (!profile) {
+    return c.json({ error: 'invalid_profile', message: 'Send a goal, sex, birth year, height, weight and activity level.' }, 400)
+  }
+  const targets = calculateTargets(profile)
+  if (!targets) {
+    return c.json({ error: 'invalid_profile', message: 'Those numbers are outside the range we can work with.' }, 400)
+  }
+
+  const now = Date.now()
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `INSERT INTO fitness_body_profile
+         (user_id, goal_type, sex, birth_year, height_cm, weight_kg, activity_level, bmr, tdee, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         goal_type = excluded.goal_type,
+         sex = excluded.sex,
+         birth_year = excluded.birth_year,
+         height_cm = excluded.height_cm,
+         weight_kg = excluded.weight_kg,
+         activity_level = excluded.activity_level,
+         bmr = excluded.bmr,
+         tdee = excluded.tdee,
+         updated_at = excluded.updated_at`,
+    ).bind(
+      session.userId,
+      profile.goal_type,
+      profile.sex,
+      profile.birth_year,
+      profile.height_cm,
+      profile.weight_kg,
+      profile.activity_level,
+      targets.bmr,
+      targets.tdee,
+      now,
+      now,
+    ),
+    c.env.DB.prepare(
+      `INSERT INTO fitness_profiles
+         (user_id, calorie_target, protein_target_g, carbs_target_g, fat_target_g,
+          fiber_target_g, water_target_ml, exercise_target_min, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         calorie_target = excluded.calorie_target,
+         protein_target_g = excluded.protein_target_g,
+         carbs_target_g = excluded.carbs_target_g,
+         fat_target_g = excluded.fat_target_g,
+         fiber_target_g = excluded.fiber_target_g,
+         water_target_ml = excluded.water_target_ml,
+         exercise_target_min = excluded.exercise_target_min,
+         updated_at = excluded.updated_at`,
+    ).bind(
+      session.userId,
+      targets.calorie_target,
+      targets.protein_target_g,
+      targets.carbs_target_g,
+      targets.fat_target_g,
+      targets.fiber_target_g,
+      targets.water_target_ml,
+      targets.exercise_target_min,
+      now,
+      now,
+    ),
+  ])
+
   return c.json({ targets })
 })
 
 // Get all logs for a date range
 app.get('/api/fitness/logs', async (c) => {
+
   const cookie = c.req.header('cookie') ?? null
   const session = await getSession(c.env.fitness_sessions, cookie)
   if (!session) return c.json({ error: 'unauthorized' }, 401)
@@ -496,6 +645,21 @@ app.post('/api/fitness/goals', async (c) => {
   const goal = await c.env.DB.prepare(
     'SELECT * FROM fitness_goals WHERE id = ? AND user_id = ?',
   ).bind(goalId, session.userId).first()
+
+  // The daily calorie target has one home: `fitness_profiles.calorie_target`.
+  // The "Eat well" goal and the macro target are two views of the same
+  // number, so setting either one sets the other - otherwise the dashboard
+  // ends up showing two different daily calorie targets side by side.
+  if (goalType === 'nutrition' && goalPeriod === 'day') {
+    await c.env.DB.prepare(
+      `UPDATE fitness_profiles
+       SET calorie_target = ?, updated_at = ?
+       WHERE user_id = ?`,
+    )
+      .bind(Math.round(target), now, session.userId)
+      .run()
+  }
+
   return c.json({ goal })
 })
 

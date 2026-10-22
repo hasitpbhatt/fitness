@@ -191,6 +191,10 @@ export default function Dashboard() {
     focusGoal && focusGoal.target > 0
       ? Math.min(100, Math.round((focusProgress / focusGoal.target) * 100))
       : 0
+  // A calorie goal is a ceiling, so it is shown as a budget with a remainder
+  // rather than as progress towards a maximum.
+  const isCalorieGoal = focusGoal?.type === 'nutrition'
+  const focusRemaining = isCalorieGoal ? focusGoal.target - focusProgress : 0
 
   const confirmDetectedTimezone = async () => {
     if (!profile?.timezone) return
@@ -362,7 +366,7 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <div>
               <p className="text-[12px] uppercase tracking-wide text-muted">Your focus</p>
-              <p className="mt-0.5 text-[15px] font-semibold">
+              <p className="mt-0.5 text-[15px] font-semibold text-content">
                 {GOAL_LABELS[focusGoal.type] ?? 'Your focus'}
               </p>
             </div>
@@ -374,19 +378,42 @@ export default function Dashboard() {
               </span>
             </p>
           </div>
-          <div
-            className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2"
-            role="progressbar"
-            aria-valuemin={0}
-            aria-valuemax={focusGoal.target}
-            aria-valuenow={Math.min(focusProgress, focusGoal.target)}
-            aria-label={`${GOAL_LABELS[focusGoal.type] ?? 'Goal'} progress`}
-          >
-            <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${focusPct}%` }} />
-          </div>
-          <p className="mt-2 text-[11px] text-muted">
-            {goalPeriodLabel(focusGoal.period)} - {focusPct}% of target
-          </p>
+          {isCalorieGoal ? (
+            /* A calorie target is a ceiling, not something to fill up, so it
+               reads as a budget with what is left - never as a bar that
+               rewards eating more. */
+            <>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className={`h-full rounded-full transition-[width] ${
+                    focusPct > 100 ? 'bg-warn' : 'bg-accent'
+                  }`}
+                  style={{ width: `${Math.min(100, focusPct)}%` }}
+                />
+              </div>
+              <p className="mt-2 text-[11px] text-muted">
+                {focusRemaining > 0
+                  ? `${focusRemaining.toLocaleString('en-US')} kcal left today`
+                  : `${Math.abs(focusRemaining).toLocaleString('en-US')} kcal over your daily target`}
+              </p>
+            </>
+          ) : (
+            <>
+              <div
+                className="mt-3 h-2 overflow-hidden rounded-full bg-surface-2"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={focusGoal.target}
+                aria-valuenow={Math.min(focusProgress, focusGoal.target)}
+                aria-label={`${GOAL_LABELS[focusGoal.type] ?? 'Goal'} progress`}
+              >
+                <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${focusPct}%` }} />
+              </div>
+              <p className="mt-2 text-[11px] text-muted">
+                {goalPeriodLabel(focusGoal.period)} - {focusPct}% of target
+              </p>
+            </>
+          )}
         </Card>
       )}
 

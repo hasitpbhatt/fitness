@@ -363,6 +363,131 @@ export function preferencesPromptBlock(prefs: Preferences | null | undefined): s
   ].join('\n')
 }
 
+/**
+ * Words that mean a food is off-limits, keyed by the allergen the member
+ * declared. A member who says "no dairy" should not be served paneer, even
+ * though the food database has no `dairy` tag.
+ */
+export const DAIRY_FOOD_WORDS = [
+  'paneer',
+  'curd',
+  'milk',
+  'ghee',
+  'butter',
+  'cheese',
+  'yogurt',
+  'yoghurt',
+  'cream',
+  'khoya',
+  'lassi',
+  'buttermilk',
+]
+
+/** Foods that contain milk even though the name does not say so. */
+export const MILK_DRINK_WORDS = ['chai', 'coffee']
+
+/** Animal flesh - never acceptable to a vegetarian or vegan. */
+export const MEAT_FOOD_WORDS = [
+  'chicken',
+  'mutton',
+  'lamb',
+  'beef',
+  'pork',
+  'fish',
+  'salmon',
+  'tuna',
+  'cod',
+  'seabass',
+  'surmai',
+  'kingfish',
+  'pomfret',
+  'prawn',
+  'shrimp',
+  'crab',
+  'lobster',
+  'keema',
+]
+
+/** Eggs - acceptable to an eggetarian, never to a vegetarian or vegan. */
+export const EGG_FOOD_WORDS = ['egg', 'omelette', 'omelet', 'boiled egg']
+
+const ALLERGEN_FOOD_WORDS: Record<string, string[]> = {
+  gluten: ['chapati', 'roti', 'bread', 'wheat', 'maida', 'pasta', 'noodles', 'bun', 'paratha', 'samosa'],
+  dairy: DAIRY_FOOD_WORDS,
+  lactose: DAIRY_FOOD_WORDS,
+  nuts: ['badam', 'almond', 'cashew', 'walnut', 'peanut', 'nut', 'pista', 'kaju'],
+  peanuts: ['peanut', 'moongphali', 'groundnut'],
+  'tree nuts': ['badam', 'almond', 'cashew', 'walnut', 'pista', 'kaju'],
+  eggs: EGG_FOOD_WORDS,
+  soy: ['soy', 'soya', 'tofu', 'tempeh', 'edamame'],
+  shellfish: ['prawn', 'shrimp', 'crab', 'lobster', 'clam', 'mussel', 'squid'],
+  fish: ['fish', 'salmon', 'tuna', 'cod', 'seabass', 'surmai', 'kingfish', 'pomfret'],
+  sesame: ['sesame', 'til', 'till'],
+  mustard: ['mustard', 'sarson', 'rai', 'raita'],
+  celery: ['celery'],
+  sulphites: ['sulphite', 'sulfite', 'dried fruit', 'raisin'],
+}
+
+/** Food names that mean the item is not vegetarian. */
+export const NON_VEG_FOOD_WORDS = [...MEAT_FOOD_WORDS, ...EGG_FOOD_WORDS, 'biryani']
+
+export type FoodVerdict = {
+  blocked: boolean
+  reasons: string[]
+}
+
+/**
+ * Decides whether a food may appear in a member's plan. Checks the foods the
+ * member said to avoid, the allergens they declared, and - for a non-vegetarian
+ * plan - whether a food is actually vegetarian.
+ */
+export function checkFoodAgainstPreferences(
+  foodName: string,
+  prefs: Preferences | null,
+  options: { diet?: 'vegetarian' | 'eggetarian' | 'vegan' | 'non-vegetarian' } = {},
+): FoodVerdict {
+  if (!prefs || !hasAnyPreference(prefs)) return { blocked: false, reasons: [] }
+  const name = foodName.toLowerCase()
+  const reasons: string[] = []
+
+  for (const avoided of prefs.avoid) {
+    if (avoided && name.includes(avoided)) {
+      reasons.push(`you avoid ${avoided}`)
+      break
+    }
+  }
+
+  for (const allergen of prefs.allergens) {
+    const words = ALLERGEN_FOOD_WORDS[allergen]
+    if (!words) continue
+    const hit = words.find((word) => name.includes(word))
+    if (hit) {
+      reasons.push(`${allergen} allergy`)
+      break
+    }
+  }
+
+  // A member who is vegetarian should not be served a non-vegetarian dish by
+  // a plan that was built for a different diet.
+  if (options.diet === 'non-vegetarian') {
+    const isVeg = !NON_VEG_FOOD_WORDS.some((word) => name.includes(word))
+    if (isVeg && prefs.diets.some((diet) => diet === 'vegetarian' || diet === 'vegan')) {
+      reasons.push('you eat vegetarian')
+    }
+  }
+
+  if (prefs.diets.includes('vegan')) {
+    const animalWord = NON_VEG_FOOD_WORDS.find((word) => name.includes(word))
+    const dairyWord = ALLERGEN_FOOD_WORDS.dairy.find((word) => name.includes(word))
+    const milkDrink = MILK_DRINK_WORDS.find((word) => name.includes(word))
+    if (animalWord || dairyWord || milkDrink) {
+      reasons.push('you eat vegan')
+    }
+  }
+
+  return { blocked: reasons.length > 0, reasons }
+}
+
 // A cheap signal that a message is worth an extraction pass. It only decides
 // whether to spend an AI call; the model still decides what the preferences are.
 const PREFERENCE_SIGNAL =

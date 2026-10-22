@@ -19,32 +19,35 @@ import Install from './pages/Install'
 import NotFound from './pages/NotFound'
 import { PwaUpdatePrompt } from './components/PwaUpdatePrompt'
 import { ToastProvider } from './components/feedback'
+import { LocaleProvider } from './i18n'
 
 export default function App() {
   return (
-    <ToastProvider>
-      <PwaUpdatePrompt />
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/install" element={<Install />} />
-        <Route path="/onboarding" element={<Onboarding />} />
-        <Route element={<AppShell />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/coach" element={<Coach />} />
-          <Route path="/log" element={<Log />} />
-          <Route path="/foods" element={<Foods />} />
-          <Route path="/meal-plan" element={<MealPlan />} />
-          <Route path="/achievements" element={<Achievements />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/measurements" element={<Measurements />} />
-          <Route path="/admin/members" element={<AdminMembers />} />
-          <Route path="/admin/access" element={<AdminAccess />} />
-          <Route path="/admin/analytics" element={<AdminAnalytics />} />
-          <Route path="/admin/notifications" element={<AdminNotifications />} />
-        </Route>
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </ToastProvider>
+    <LocaleProvider>
+      <ToastProvider>
+        <PwaUpdatePrompt />
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/install" element={<Install />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route element={<AppShell />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/coach" element={<Coach />} />
+            <Route path="/log" element={<Log />} />
+            <Route path="/foods" element={<Foods />} />
+            <Route path="/meal-plan" element={<MealPlan />} />
+            <Route path="/achievements" element={<Achievements />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/measurements" element={<Measurements />} />
+            <Route path="/admin/members" element={<AdminMembers />} />
+            <Route path="/admin/access" element={<AdminAccess />} />
+            <Route path="/admin/analytics" element={<AdminAnalytics />} />
+            <Route path="/admin/notifications" element={<AdminNotifications />} />
+          </Route>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </ToastProvider>
+    </LocaleProvider>
   )
 }
