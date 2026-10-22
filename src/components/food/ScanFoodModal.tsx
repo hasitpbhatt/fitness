@@ -20,7 +20,7 @@ type Props = {
 
 type Phase = 'capture' | 'scanning' | 'review' | 'saving' | 'error'
 
-const MAX_SOURCE_BYTES = 15 * 1024 * 1024
+const MAX_SOURCE_BYTES = 5 * 1024 * 1024
 
 const EMPTY_TOTALS: ScanTotals = {
   calories: 0,
@@ -171,7 +171,7 @@ export function ScanFoodModal({ open, onClose, onLogged }: Props) {
     }
     if (file.size > MAX_SOURCE_BYTES) {
       setPhase('error')
-      setError('That photo is too large. Try one under 15 MB.')
+      setError('That photo is too large. Try one under 5 MB.')
       return
     }
     setError(null)

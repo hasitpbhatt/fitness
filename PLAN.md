@@ -144,7 +144,7 @@ scan/search/coach gated; grant/revoke notifications sent; scheduler-based auto-e
 | C-09 | Live classes: schedule, synced player, attendance, local time | none | schedule + attendance now; synced playback only if demand (**P3**) |
 | C-10 | Workout comments/community | leaderboard + badges only | comments/cheers with moderation; keep the public leaderboard lead (**P2**) |
 | C-11 | Fitness Reset education (Eat Smart / Move Smart) | none | curated video/article library with completion (**P3**) |
-| C-12 | Measurements + weekly same-outfit photo compare | PARTIAL | weight/waist/hips/arms history DONE; private weekly photo compare pending private object storage |
+| C-12 | Measurements + weekly same-outfit photo compare | OUT OF SCOPE | weight/waist/hips/arms history DONE; weekly photo compare requires R2/private storage — deferred indefinitely |
 | C-13 | PWA install page, offline shell, forced update | DONE | manifest + icons, `/install` page, offline app-shell cache, prompted service-worker updates |
 | C-14 | Streaks, badges, daily loops, leaderboard | DONE | keep; add plan-adherence streaks when schedules land |
 | C-15 | Macro targets + macro progress + editable entries + yesterday correction | DONE | protein/carb/fat targets, per-day bars, edit/remove, yesterday fix |
@@ -545,8 +545,9 @@ The first release is done when:
   Reliability is capped to the latest 10,000 events and labels the view as sampled when capped.
   Fitness **179/179 checks**, typecheck, lint, build pass.
 - **Next:** deploy remains pending explicit approval. Wave 1's planned baseline batch is
-  implemented; remaining partials are C-02 scheduler-based auto-expiry. C-12 photo compare
-  waits on private storage approval.
+  implemented; remaining partial is C-02 scheduler-based auto-expiry (deferred — lazy
+  expiry already handles functional requirement). C-12 weekly photo comparison is
+  out of scope (requires R2/private storage).
 
 ## 12. Working agreement
 
