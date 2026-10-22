@@ -9,18 +9,21 @@ import { AI_COACH_LIMIT, COACH_EXHAUSTED_MESSAGE, COACH_OUT_OF_CREDITS_MESSAGE, 
 import { ApiError, api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { useEntitlement } from '../lib/useEntitlement'
+import { useLocale } from '../i18n'
+import type { TranslationKey } from '../i18n/en'
 import type { CoachMessage, Preferences, ScanQuota } from '../lib/types'
 
-const STARTERS = [
-  'What should I eat today?',
-  'Review my last 7 days',
-  '20-minute workout idea',
-  'How do I sleep better?',
+const STARTERS: TranslationKey[] = [
+  'coach.starter1',
+  'coach.starter2',
+  'coach.starter3',
+  'coach.starter4',
 ]
 
 export default function Coach() {
   const { user, loading } = useAuth()
   const entitlement = useEntitlement(user?.id)
+  const { t } = useLocale()
   const [messages, setMessages] = useState<CoachMessage[]>([])
   const [input, setInput] = useState('')
   const [quota, setQuota] = useState<ScanQuota | null>(null)
@@ -76,7 +79,7 @@ export default function Coach() {
   if (!user) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
-        <h1 className="text-lg font-semibold text-content">AI coach</h1>
+        <h1 className="text-lg font-semibold text-content">{t('coach.title')}</h1>
         <p className="mt-2 text-[13px] text-muted">Sign in to ask questions grounded in your recent progress.</p>
         <Link to="/login" className="btn-primary mt-4 inline-flex">
           Sign in with Google
@@ -90,7 +93,7 @@ export default function Coach() {
       <div className="mx-auto max-w-2xl">
         <Card className="p-8 text-center">
           <p className="text-[11px] uppercase tracking-wide text-muted">Plus feature</p>
-          <h1 className="mt-1 text-xl font-semibold text-content">The AI coach is part of Plus</h1>
+          <h1 className="mt-1 text-xl font-semibold text-content">{t('coach.paywallTitle')}</h1>
           <p className="mx-auto mt-2 max-w-md text-[13px] text-muted">
             Ask your coach to enable access. Manual logging, goals, meal plans, habits, and the
             food database stay free.
@@ -166,10 +169,8 @@ export default function Coach() {
     <div className="mx-auto flex max-w-3xl flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-content">AI coach</h1>
-          <p className="mt-0.5 text-[13px] text-muted">
-            Grounded in your targets, goals, streak and last 7 days. General guidance, not medical advice.
-          </p>
+          <h1 className="text-xl font-semibold text-content">{t('coach.title')}</h1>
+          <p className="mt-0.5 text-[13px] text-muted">{t('coach.subtitle')}</p>
         </div>
         <Button variant="secondary" size="sm" onClick={clear} disabled={messages.length === 0 || sending}>
           Clear chat
@@ -186,7 +187,7 @@ export default function Coach() {
           </span>
           {remaining !== null && (
             <span className="num text-[11px] text-muted">
-              {remaining} of {quota?.limit} left today
+              {t('coach.messagesLeft', { remaining, limit: quota?.limit ?? 0 })}
             </span>
           )}
         </div>
@@ -201,9 +202,9 @@ export default function Coach() {
           {messages.length === 0 && !sending ? (
             <div className="flex h-full flex-col justify-center gap-3 py-4">
               <div className="text-center">
-                <p className="text-[14px] font-medium text-content">What would you like help with?</p>
+                <p className="text-[14px] font-medium text-content">{t('coach.emptyTitle')}</p>
                 <p className="mt-1 text-[12px] text-muted">
-                  Start with one of these, or type your own question below.
+                  {t('coach.emptyBody')}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -211,11 +212,11 @@ export default function Coach() {
                   <button
                     key={starter}
                     type="button"
-                    onClick={() => void ask(starter)}
+                    onClick={() => void ask(t(starter))}
                     disabled={blocked || sending}
                     className="min-h-[52px] rounded-lg border border-line bg-surface-2 px-2.5 py-2 text-left text-[12px] leading-snug text-content transition-colors hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {starter}
+                    {t(starter)}
                   </button>
                 ))}
               </div>
@@ -237,7 +238,7 @@ export default function Coach() {
           {sending && (
             <div className="mr-auto flex items-center gap-2 rounded-2xl rounded-bl-md border border-line bg-surface-2 px-3.5 py-2.5 text-[12px] text-muted">
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
-              Reading your recent data...
+              {t('coach.sending')}
             </div>
           )}
           <div ref={endRef} />
@@ -265,7 +266,7 @@ export default function Coach() {
                 void ask(input)
               }
             }}
-            placeholder="Ask about food, training, sleep, or your progress..."
+            placeholder={t('coach.placeholder')}
           />
           <div className="mt-2 flex items-center justify-between gap-3">
             <span className="hidden text-[11px] text-muted sm:inline">

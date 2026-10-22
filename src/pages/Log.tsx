@@ -9,6 +9,8 @@ import { Alert, EmptyState, Skeleton } from '../components/feedback'
 import { Icon } from '../components/icons'
 import { ScanFoodModal } from '../components/food/ScanFoodModal'
 import { EditLogModal } from '../components/EditLogModal'
+import { useLocale } from '../i18n'
+import type { TranslationKey } from '../i18n/en'
 import type { FitnessLog } from '../lib/types'
 
 type ActivityType = 'workout' | 'nutrition' | 'sleep' | 'water' | 'custom'
@@ -21,9 +23,19 @@ const ACTIVITY_TYPES: { id: ActivityType; label: string; icon: string }[] = [
   { id: 'custom', label: 'Custom', icon: '✏️' },
 ]
 
+/** The activity type names, in the member's language. */
+const ACTIVITY_LABEL_KEYS: Record<ActivityType, TranslationKey> = {
+  workout: 'log.type.workout',
+  nutrition: 'log.type.nutrition',
+  sleep: 'log.type.sleep',
+  water: 'log.type.water',
+  custom: 'log.type.custom',
+}
+
 export default function Log() {
   const { user, loading: authLoading } = useAuth()
   const entitlement = useEntitlement(user?.id)
+  const { t } = useLocale()
   const [type, setType] = useState<ActivityType>('workout')
   const [activity, setActivity] = useState('')
   const [durationMin, setDurationMin] = useState<string>('')
@@ -107,7 +119,7 @@ export default function Log() {
       setHours('')
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === 'already_logged_today') {
-        const label = ACTIVITY_TYPES.find((entry) => entry.id === type)?.label ?? 'That activity'
+        const label = t(ACTIVITY_LABEL_KEYS[type])
         setAlreadyLogged(true)
         setMessage({
           kind: 'error',
@@ -158,8 +170,8 @@ export default function Log() {
   if (!user) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
-        <h1 className="text-lg font-semibold text-content">Log activity</h1>
-        <p className="mt-2 text-[13px] text-muted">Sign in to track your day.</p>
+        <h1 className="text-lg font-semibold text-content">{t('log.submit')}</h1>
+        <p className="mt-2 text-[13px] text-muted">{t('log.signInToTrack')}</p>
         <Link to="/login" className="btn-primary mt-4 inline-flex">
           Sign in with Google
         </Link>
@@ -186,11 +198,11 @@ export default function Log() {
             <h1 className="text-lg font-semibold text-content">
               Log {day === 'yesterday' ? 'Yesterday' : 'Today'}
             </h1>
-            <p className="mt-0.5 text-[13px] text-muted">One entry per activity type per day.</p>
+            <p className="mt-0.5 text-[13px] text-muted">{t('log.subtitle')}</p>
           </div>
           <Button variant="secondary" size="sm" onClick={openScan}>
             <Icon name="camera" size={16} />
-            Scan food
+            {t('log.scanFood')}
           </Button>
         </div>
 
@@ -247,7 +259,7 @@ export default function Log() {
               <input
                 id="log-activity"
                 type="text"
-                placeholder="e.g. 30 min walk, salad, 8 hours, 500ml"
+                placeholder={t('log.activityPlaceholder')}
                 className="input"
                 value={activity}
                 onChange={(e) => setActivity(e.target.value)}
@@ -257,9 +269,9 @@ export default function Log() {
             {type === 'workout' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label htmlFor="log-duration" className="mb-1 block text-[12px] font-medium text-content">
-                    Duration (min)
-                  </label>
+                <label htmlFor="log-duration" className="mb-1 block text-[12px] font-medium text-content">
+                  {t('log.duration')}
+                </label>
                   <input
                     id="log-duration"
                     type="number"
@@ -270,9 +282,9 @@ export default function Log() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="log-calories" className="mb-1 block text-[12px] font-medium text-content">
-                    Calories
-                  </label>
+                <label htmlFor="log-calories" className="mb-1 block text-[12px] font-medium text-content">
+                  {t('log.calories')}
+                </label>
                   <input
                     id="log-calories"
                     type="number"
@@ -288,9 +300,9 @@ export default function Log() {
             {type === 'nutrition' && (
               <>
                 <div>
-                  <label htmlFor="log-nutrition-calories" className="mb-1 block text-[12px] font-medium text-content">
-                    Calories
-                  </label>
+                <label htmlFor="log-nutrition-calories" className="mb-1 block text-[12px] font-medium text-content">
+                  {t('log.calories')}
+                </label>
                   <input
                     id="log-nutrition-calories"
                     type="number"
@@ -303,9 +315,9 @@ export default function Log() {
                 <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   {(
                     [
-                      ['Protein (g)', protein, setProtein, 'log-protein'],
-                      ['Carbs (g)', carbs, setCarbs, 'log-carbs'],
-                      ['Fat (g)', fat, setFat, 'log-fat'],
+                      [t('log.protein'), protein, setProtein, 'log-protein'],
+                      [t('log.carbs'), carbs, setCarbs, 'log-carbs'],
+                      [t('log.fat'), fat, setFat, 'log-fat'],
                     ] as const
                   ).map(([label, value, setter, id]) => (
                     <div key={id}>
@@ -329,7 +341,7 @@ export default function Log() {
             {type === 'sleep' && (
               <div>
                 <label htmlFor="log-hours" className="mb-1 block text-[12px] font-medium text-content">
-                  Hours
+                  {t('log.hours')}
                 </label>
                 <input
                   id="log-hours"
@@ -346,7 +358,7 @@ export default function Log() {
             {type === 'water' && (
               <div>
                 <label htmlFor="log-water" className="mb-1 block text-[12px] font-medium text-content">
-                  Water (ml)
+                  {t('log.water')}
                 </label>
                 <input
                   id="log-water"
@@ -387,7 +399,7 @@ export default function Log() {
           )}
 
           <Button type="submit" className="mt-5 w-full" loading={busy}>
-            {day === 'yesterday' ? 'Log to yesterday' : 'Log activity'}
+            {day === 'yesterday' ? t('log.submitYesterday') : t('log.submit')}
           </Button>
         </form>
       </Card>
@@ -395,10 +407,10 @@ export default function Log() {
       <Card>
         <div className="border-b border-line px-4 py-3">
           <h2 className="font-semibold text-content">
-            {day === 'yesterday' ? "Yesterday's entries" : "Today's entries"}
+            {day === 'yesterday' ? t('log.yesterdayEntries') : t('log.todayEntries')}
           </h2>
           <p className="mt-0.5 text-[12px] text-muted">
-            Edit or remove an entry while it is still in the 7-day window.
+            {t('log.entriesSubtitle')}
           </p>
         </div>
 
@@ -414,7 +426,7 @@ export default function Log() {
         ) : dayLogs.length === 0 ? (
           <EmptyState
             icon="plus-circle"
-            title={day === 'yesterday' ? 'Nothing logged yesterday' : 'Nothing logged yet today'}
+            title={day === 'yesterday' ? t('log.noEntriesYesterday') : t('log.noEntries')}
             description={
               day === 'yesterday'
                 ? 'Your streak starts with one entry — even a short one counts.'
@@ -444,7 +456,9 @@ export default function Log() {
                     {meta?.icon ?? ''}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium text-content">{meta?.label ?? log.type}</p>
+                    <p className="truncate text-[13px] font-medium text-content">
+                      {meta ? t(ACTIVITY_LABEL_KEYS[meta.id]) : log.type}
+                    </p>
                     <p className="truncate text-[12px] text-muted">{log.activity || 'No details'}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
@@ -453,9 +467,9 @@ export default function Log() {
                       type="button"
                       onClick={() => setEditingLog(log)}
                       className="tap flex items-center justify-center rounded-md text-[12px] text-muted transition-colors hover:bg-surface-2 hover:text-content"
-                      aria-label={`Edit ${meta?.label ?? log.type} log`}
+                      aria-label={`Edit ${meta ? t(ACTIVITY_LABEL_KEYS[meta.id]) : log.type} log`}
                     >
-                      Edit
+                      {t('log.edit')}
                     </button>
                   </div>
                 </li>

@@ -5,6 +5,7 @@ import { Alert } from '../components/feedback'
 import { Icon } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
+import { useLocale } from '../i18n'
 
 type Diet = 'vegetarian' | 'eggetarian' | 'vegan' | 'non-vegetarian'
 
@@ -117,7 +118,9 @@ function MealCard({ day }: { day: PlanDay }) {
 
 export default function MealPlan() {
   const { user, loading } = useAuth()
+  const { t } = useLocale()
   const [diet, setDiet] = useState<Diet>('vegetarian')
+  
   const [plan, setPlan] = useState<MealPlan | null>(null)
   const [fetching, setFetching] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -172,7 +175,7 @@ export default function MealPlan() {
   if (!user) {
     return (
       <Card className="mx-auto max-w-md p-8 text-center">
-        <h1 className="text-lg font-semibold">Meal plan</h1>
+        <h1 className="text-lg font-semibold">{t('plan.title')}</h1>
         <p className="mt-2 text-[13px] text-muted">Sign in to see a 7-day plan scaled to your targets.</p>
         <Link to="/login" className="btn-primary mt-4 inline-flex">Sign in with Google</Link>
       </Card>
@@ -193,10 +196,8 @@ export default function MealPlan() {
       <div className="no-print flex flex-col gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-content">Meal plan</h1>
-            <p className="mt-1 text-[13px] text-muted">
-              A simple 7-day Indian plan, scaled toward your calorie and protein targets.
-            </p>
+            <h1 className="text-xl font-semibold text-content">{t('plan.title')}</h1>
+          <p className="mt-1 text-[13px] text-muted">{t('plan.subtitle')}</p>
           </div>
           <Button variant="secondary" size="sm" onClick={() => window.print()} disabled={!plan || fetching}>
             <Icon name="printer" size={16} />
@@ -232,11 +233,11 @@ export default function MealPlan() {
             })}
           </div>
           <p className="text-[11px] text-muted">
-            Not right?{' '}
+            {t('plan.dietHint')}{' '}
             <Link to="/coach" className="text-accent hover:underline">
-              Tell your coach what you like or avoid
+              {t('plan.tellCoach')}
             </Link>{' '}
-            and the plan follows.
+            {t('plan.andFollows')}
           </p>
         </div>
       </div>
@@ -268,25 +269,27 @@ export default function MealPlan() {
           <Card className={`print-avoid-break p-4 ${fetching ? 'opacity-60' : ''}`}>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted">Daily target</p>
+                <p className="text-[11px] uppercase tracking-wide text-muted">{t('plan.dailyTarget')}</p>
                 <p className="num mt-0.5 text-xl font-semibold">{plan.target_calories} kcal</p>
                 <p className="text-[12px] text-muted">{plan.target_protein_g} g protein</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted">Plan average</p>
+                <p className="text-[11px] uppercase tracking-wide text-muted">{t('plan.planAverage')}</p>
                 <p className="num mt-0.5 text-xl font-semibold">{plan.average_totals.calories} kcal</p>
                 <p className="text-[12px] text-muted">{plan.average_totals.protein_g} g protein</p>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-muted">Plan</p>
+                <p className="text-[11px] uppercase tracking-wide text-muted">{t('plan.plan')}</p>
                 <p className="mt-0.5 text-[14px] font-medium text-content">{plan.diet_label}</p>
-                <p className="text-[12px] text-muted">7 days from {plan.days[0]?.date_label}</p>
+                <p className="text-[12px] text-muted">
+                  {t('plan.daysFrom', { date: plan.days[0]?.date_label ?? '' })}
+                </p>
               </div>
             </div>
 
             {plan.adjustments.length > 0 && (
               <div className="mt-3 border-t border-line pt-3">
-                <p className="text-[11px] uppercase tracking-wide text-muted">Adapted to you</p>
+                <p className="text-[11px] uppercase tracking-wide text-muted">{t('plan.adaptedToYou')}</p>
                 <ul className="mt-1.5 space-y-1">
                   {plan.adjustments.map((adjustment) => (
                     <li key={adjustment} className="flex gap-2 text-[12px] text-muted">
@@ -302,8 +305,7 @@ export default function MealPlan() {
 
             {plan.uses_defaults && (
               <p className="mt-3 border-t border-line pt-3 text-[12px] text-warn">
-                Some targets are still at the default. Set your calorie and protein targets on the{' '}
-                <Link to="/dashboard" className="underline">dashboard</Link> to personalize portions.
+                {t('plan.defaultsWarning')}
               </p>
             )}
           </Card>
@@ -342,7 +344,7 @@ export default function MealPlan() {
           </div>
 
           <Card className="print-avoid-break p-4">
-            <h2 className="text-[12px] font-semibold uppercase tracking-wide text-muted">Notes</h2>
+            <h2 className="text-[12px] font-semibold uppercase tracking-wide text-muted">{t('plan.notesTitle')}</h2>
             <ul className="mt-2 space-y-1 text-[12px] text-muted">
               {plan.notes.map((note) => (
                 <li key={note} className="flex gap-2">
